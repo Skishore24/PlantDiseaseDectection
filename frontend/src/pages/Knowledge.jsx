@@ -116,6 +116,10 @@ export default function Knowledge() {
                   src={item.image}
                   alt={item.title}
                   className="w-16 h-16 rounded-lg object-cover border border-border shrink-0"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "/images/early_blight_leaf.png";
+                  }}
                 />
                 <div className="flex-1 min-w-0">
                   <span className={`badge ${badgeClass(item.category)} mb-1.5`}>{item.category}</span>
@@ -158,6 +162,10 @@ export default function Knowledge() {
                     src={selected.image}
                     alt={selected.title}
                     className="w-10 h-10 rounded-lg object-cover border border-border"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = "/images/early_blight_leaf.png";
+                    }}
                   />
                   <div>
                     <span className={`badge ${badgeClass(selected.category)}`}>{selected.category}</span>

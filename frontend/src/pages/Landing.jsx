@@ -71,49 +71,49 @@ const DISEASES = [
     name: "Tomato Early Blight",
     type: "Fungal",
     severity: "badge-warning",
-    image: "https://images.unsplash.com/photo-1592417817098-8f3d6eb231fc?w=600&auto=format&fit=crop&q=80"
+    image: "/images/early_blight_leaf.png"
   },
   {
     name: "Potato Late Blight",
     type: "Oomycete",
     severity: "badge-danger",
-    image: "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=600&auto=format&fit=crop&q=80"
+    image: "/images/diseased_leaf_hero.png"
   },
   {
     name: "Healthy Tomato Leaf",
     type: "Healthy",
     severity: "badge-success",
-    image: "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?w=600&auto=format&fit=crop&q=80"
+    image: "/images/healthy_leaf.png"
   },
   {
     name: "Tomato Bacterial Spot",
     type: "Bacterial",
     severity: "badge-danger",
-    image: "https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?w=600&auto=format&fit=crop&q=80"
+    image: "/images/bacterial_spot_leaf.png"
   },
   {
     name: "Pepper Bacterial Spot",
     type: "Bacterial",
     severity: "badge-warning",
-    image: "https://images.unsplash.com/photo-1508747703725-719777637510?w=600&auto=format&fit=crop&q=80"
+    image: "/images/bacterial_spot_leaf.png"
   },
   {
     name: "Tomato Leaf Mold",
     type: "Fungal",
     severity: "badge-warning",
-    image: "https://images.unsplash.com/photo-1563514227147-6d2ff665a6a0?w=600&auto=format&fit=crop&q=80"
+    image: "/images/diseased_leaf_hero.png"
   },
   {
     name: "Tomato Septoria Spot",
     type: "Fungal",
     severity: "badge-warning",
-    image: "https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=600&auto=format&fit=crop&q=80"
+    image: "/images/early_blight_leaf.png"
   },
   {
     name: "Pepper Healthy Foliage",
     type: "Healthy",
     severity: "badge-success",
-    image: "https://images.unsplash.com/photo-1591857177580-dc82b9ac4e1e?w=600&auto=format&fit=crop&q=80"
+    image: "/images/healthy_leaf.png"
   },
 ];
 
@@ -206,9 +206,13 @@ export default function Landing() {
                 {/* Image Showcase */}
                 <div className="relative rounded-lg overflow-hidden border border-border bg-bg-subtle aspect-[4/3]">
                   <img
-                    src="https://images.unsplash.com/photo-1592417817098-8f3d6eb231fc?w=800&auto=format&fit=crop&q=80"
+                    src="/images/diseased_leaf_hero.png"
                     alt="Leaf Scan Preview"
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = "/images/early_blight_leaf.png";
+                    }}
                   />
 
                   {/* AI Scanning Reticle Overlay */}
@@ -342,11 +346,14 @@ export default function Landing() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {DISEASES.map((d) => (
               <div key={d.name} className="card overflow-hidden hover:shadow-md transition-shadow">
-                <div className="h-32 bg-bg-subtle relative overflow-hidden">
+                <div className="h-32 bg-bg-subtle relative overflow-hidden flex items-center justify-center">
                   <img
                     src={d.image}
                     alt={d.name}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = "none";
+                    }}
                   />
                   <span className={`absolute top-2 right-2 badge ${d.severity}`}>
                     {d.type}

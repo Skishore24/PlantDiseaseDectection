@@ -26,15 +26,15 @@ import CameraModal from "../components/CameraModal";
 const SAMPLES = [
   {
     name: "Diseased Leaf Sample",
-    url: "https://images.unsplash.com/photo-1592417817098-8f3d6eb231fc?w=800&auto=format&fit=crop&q=80",
+    url: "/images/early_blight_leaf.png",
   },
   {
     name: "Healthy Foliage Sample",
-    url: "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?w=800&auto=format&fit=crop&q=80",
+    url: "/images/healthy_leaf.png",
   },
   {
     name: "Pepper Leaf Sample",
-    url: "https://images.unsplash.com/photo-1508747703725-719777637510?w=800&auto=format&fit=crop&q=80",
+    url: "/images/bacterial_spot_leaf.png",
   },
 ];
 

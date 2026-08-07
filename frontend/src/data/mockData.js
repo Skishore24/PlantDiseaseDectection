@@ -44,7 +44,7 @@ export const MOCK_KNOWLEDGE_BASE = [
     organicTreatment: "Neem oil foliage spray (2%), bio-fungicide Bacillus subtilis strain QST 713.",
     chemicalTreatment: "Copper Hydroxide 50% WP or Chlorothalonil 75% WP sprayed at 7-10 day intervals.",
     prevention: "3-year field crop rotation, drip irrigation to keep canopy dry, wide seed spacing (40cm+).",
-    image: "https://images.unsplash.com/photo-1592417817098-8f3d6eb231fc?w=800&auto=format&fit=crop&q=60"
+    image: "/images/early_blight_leaf.png"
   },
   {
     id: "kb-2",
@@ -59,7 +59,7 @@ export const MOCK_KNOWLEDGE_BASE = [
     organicTreatment: "Liquid copper octanoate or Serenade Garden bio-fungicide application.",
     chemicalTreatment: "Copper sulfate bactericide blended with Mancozeb formulation.",
     prevention: "Use certified pathogen-free seeds, avoid overhead watering, disinfect tools with 70% ethanol.",
-    image: "https://images.unsplash.com/photo-1591857177580-dc82b9ac4e1e?w=800&auto=format&fit=crop&q=60"
+    image: "/images/bacterial_spot_leaf.png"
   },
   {
     id: "kb-3",
@@ -74,7 +74,7 @@ export const MOCK_KNOWLEDGE_BASE = [
     organicTreatment: "Balanced organic NPK compost tea feed.",
     chemicalTreatment: "No chemical intervention needed.",
     prevention: "Maintain routine soil pH (6.0 - 6.8), adequate sunlight, and scheduled drip irrigation.",
-    image: "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?w=800&auto=format&fit=crop&q=60"
+    image: "/images/healthy_leaf.png"
   },
   {
     id: "kb-4",
@@ -89,7 +89,7 @@ export const MOCK_KNOWLEDGE_BASE = [
     organicTreatment: "Sulfur dust spray, systemic Trichoderma harzianum bio-agent.",
     chemicalTreatment: "Azoxystrobin or Propiconazole triazole fungicide.",
     prevention: "Plant resistant hybrid corn varieties, manage high humidity in field rows.",
-    image: "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&auto=format&fit=crop&q=60"
+    image: "/images/diseased_leaf_hero.png"
   },
   {
     id: "kb-5",
@@ -104,7 +104,7 @@ export const MOCK_KNOWLEDGE_BASE = [
     organicTreatment: "Lime sulfur foliage wash, potassium bicarbonate sprays.",
     chemicalTreatment: "Myclobutanil or Captan 80 WDG application post-petal fall.",
     prevention: "Rake and burn fallen winter leaf litter, prune tree canopy for solar exposure.",
-    image: "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=800&auto=format&fit=crop&q=60"
+    image: "/images/early_blight_leaf.png"
   },
   {
     id: "kb-6",
@@ -119,7 +119,7 @@ export const MOCK_KNOWLEDGE_BASE = [
     organicTreatment: "Bordeaux mixture spray during early shoot growth.",
     chemicalTreatment: "Mancozeb or tebuconazole application from pre-bloom to 4 weeks post-bloom.",
     prevention: "Prune and destroy mummified fruit clusters during winter dormancy.",
-    image: "https://images.unsplash.com/photo-1537640538966-79f369143f8f?w=800&auto=format&fit=crop&q=60"
+    image: "/images/bacterial_spot_leaf.png"
   }
 ];
 
