@@ -1,6 +1,6 @@
 /**
  * Plant AI — Dribbble Ultra-Premium Application Engine v5.2
- * Powered by PyTorch CUDA & FastAPI
+ * Powered by AI Pathomics Diagnostic Engine
  */
 
 const API = "http://127.0.0.1:8000/api/v1";
@@ -92,8 +92,8 @@ async function checkHealth() {
     if (res.ok) {
       const data = await res.json();
       if (statusDot) statusDot.className = `status-dot ${data.model_status === "demo" ? "demo" : ""}`;
-      if (statusLabel) statusLabel.textContent = data.model_status === "live" ? "Live PyTorch CUDA Engine" : "Demo Mode Active";
-      if (engineBadge) engineBadge.textContent = data.model_status === "live" ? "🧠 PyTorch CUDA · 128x128" : "🧪 Demo Mode Fallback";
+      if (statusLabel) statusLabel.textContent = data.model_status === "live" ? "Live AI Diagnostic Engine" : "Demo Mode Active";
+      if (engineBadge) engineBadge.textContent = data.model_status === "live" ? "🧠 AI Vision · Neural Network" : "🧪 Demo Mode Fallback";
     }
   } catch (err) {
     if (statusDot) statusDot.className = "status-dot demo";
@@ -445,7 +445,7 @@ function downloadPDF() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(100, 116, 139);
-    doc.text(`Generated: ${new Date().toLocaleString()} | Engine: PyTorch CUDA v5.2`, 14, 30);
+    doc.text(`Generated: ${new Date().toLocaleString()} | Engine: AI Pathomics Diagnostic Engine`, 14, 30);
 
     doc.setFontSize(14);
     doc.setTextColor(15, 23, 42);

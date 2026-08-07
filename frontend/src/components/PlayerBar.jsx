@@ -75,7 +75,7 @@ export default function PlayerBar({ result, previewUrl, onNewScan, onShowToast }
             </button>
 
             <span className="text-xs text-slate-400 dark:text-slate-500 font-mono hidden sm:inline">
-              128x128 Neural
+              AI Vision Engine
             </span>
           </div>
 

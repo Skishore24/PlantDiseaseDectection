@@ -110,7 +110,7 @@ export async function fetchHistory(limit = 50) {
 }
 
 /**
- * Run AI diagnosis on a leaf image (authenticated to backend PyTorch model & MongoDB)
+ * Run AI diagnosis on a leaf image
  * @param {File} file - Image file
  */
 export async function predictLeafImage(file) {
