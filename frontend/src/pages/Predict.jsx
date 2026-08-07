@@ -172,7 +172,7 @@ export default function Predict() {
           />
 
           {!previewUrl ? (
-            <div className="py-12 px-6 text-center">
+            <div className="py-10 px-6 text-center min-h-[300px] flex flex-col justify-center items-center">
               <div className="w-14 h-14 rounded-2xl bg-brand-light border border-brand-border flex items-center justify-center mx-auto mb-4 shadow-sm">
                 <ImageUp className="w-6 h-6 text-brand" strokeWidth={2} />
               </div>
@@ -180,8 +180,8 @@ export default function Predict() {
               <h3 className="text-base font-bold text-ink mb-1">
                 Drop your leaf photo here
               </h3>
-              <p className="text-xs text-ink-muted mb-6 max-w-xs mx-auto leading-relaxed">
-                Take a clear photo of the leaf or spots. Supports PNG, JPG, or WEBP up to 10 MB.
+              <p className="text-xs text-ink-muted mb-5 max-w-xs mx-auto leading-relaxed">
+                Take a clear photo of the symptomatic leaf or spots. Supports PNG, JPG, or WEBP up to 10 MB.
               </p>
 
               <div className="flex flex-wrap items-center justify-center gap-3">
@@ -202,16 +202,18 @@ export default function Predict() {
               </div>
 
               {/* Sample Images for Instant Demo Testing */}
-              <div className="mt-6 pt-6 border-t border-border">
-                <p className="text-2xs font-bold text-ink-muted uppercase tracking-wider mb-3">Or click a sample leaf photo to try:</p>
-                <div className="flex flex-wrap items-center justify-center gap-3">
+              <div className="mt-6 pt-5 border-t border-border w-full max-w-md">
+                <p className="text-2xs font-bold text-ink-muted uppercase tracking-wider mb-2.5">
+                  Or try a sample leaf photo:
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   {SAMPLES.map((s) => (
                     <button
                       key={s.name}
                       onClick={() => handleSampleSelect(s.url, s.name)}
                       className="group flex items-center gap-2 p-1.5 pr-3 rounded-lg border border-border bg-surface hover:border-brand-border hover:bg-bg-subtle transition-all text-left"
                     >
-                      <img src={s.url} alt={s.name} className="w-8 h-8 rounded object-cover border border-border shrink-0" />
+                      <img src={s.url} alt={s.name} className="w-7 h-7 rounded object-cover border border-border shrink-0" />
                       <span className="text-xs font-semibold text-ink group-hover:text-brand">{s.name}</span>
                     </button>
                   ))}
@@ -219,29 +221,30 @@ export default function Predict() {
               </div>
             </div>
           ) : (
-            <div className="relative p-2 bg-bg-subtle">
+            <div className="relative p-3 bg-bg-subtle min-h-[300px] rounded-xl flex items-center justify-center border border-border overflow-hidden">
               <img
                 src={previewUrl}
                 alt="Leaf preview"
-                className="w-full max-h-[380px] object-contain rounded-lg border border-border"
+                className="w-full max-h-[380px] object-contain rounded-lg"
               />
 
               <button
                 onClick={handleClear}
-                className="absolute top-4 right-4 p-1.5 rounded-lg bg-surface/90 backdrop-blur-sm border border-border text-ink-muted hover:text-danger shadow-sm transition-colors"
+                className="absolute top-4 right-4 z-20 p-2 rounded-xl bg-surface/90 backdrop-blur-md border border-border text-ink-muted hover:text-danger shadow-md transition-all"
+                title="Clear preview"
               >
                 <X className="w-4 h-4" />
               </button>
 
               {isLoading && (
-                <div className="absolute inset-0 bg-surface/90 backdrop-blur-sm flex flex-col items-center justify-center gap-3 rounded-lg">
+                <div className="absolute inset-0 z-10 bg-surface/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center gap-3">
                   <div className="relative w-12 h-12">
                     <div className="absolute inset-0 rounded-full border-3 border-border border-t-brand animate-spin" style={{ borderWidth: 3 }} />
                     <Sparkles className="absolute inset-0 m-auto w-5 h-5 text-brand" />
                   </div>
-                  <div className="text-center">
+                  <div>
                     <p className="text-sm font-bold text-ink">Analyzing Plant Leaf…</p>
-                    <p className="text-xs text-ink-muted mt-0.5">Detecting symptoms and health condition</p>
+                    <p className="text-xs text-ink-muted mt-1">Detecting pathogen symptoms and health condition</p>
                   </div>
                 </div>
               )}
@@ -478,33 +481,39 @@ export default function Predict() {
                 const timestampStr = scan.scanned_at || scan.timestamp || "";
                 const cleanTitle = diseaseStr.replace(/__/g, " ").replace(/_/g, " ");
                 const imgUrl = scan.img_url || (scan.img_path ? `/uploads/${scan.img_path}` : null);
+                const conf = Math.round(scan.confidence || 0);
 
                 return (
-                  <div key={idx} className="flex items-center gap-3 p-2.5 rounded-lg border border-border hover:bg-bg-subtle transition-colors">
+                  <div
+                    key={idx}
+                    onClick={() => setScanResult(scan)}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-border bg-surface hover:border-brand-border hover:bg-bg-subtle cursor-pointer transition-all shadow-2xs"
+                  >
                     {imgUrl ? (
                       <img
                         src={imgUrl}
                         alt={cleanTitle}
-                        className="w-8 h-8 rounded object-cover border border-border shrink-0"
+                        className="w-10 h-10 rounded-lg object-cover border border-border shrink-0"
                         onError={(e) => { e.target.style.display = 'none'; }}
                       />
                     ) : (
-                      <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${healthy ? "bg-success" : "bg-danger"}`} />
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${healthy ? "bg-success-bg text-success" : "bg-danger-bg text-danger"}`}>
+                        <Leaf className="w-4 h-4" />
+                      </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-ink truncate">
+                      <p className="text-xs font-bold text-ink truncate leading-tight">
                         {cleanTitle}
                       </p>
-                      <p className="text-2xs text-ink-muted">{timestampStr ? new Date(timestampStr).toLocaleString() : "Recent"}</p>
+                      <p className="text-2xs text-ink-muted mt-0.5">{timestampStr ? new Date(timestampStr).toLocaleString() : "Recent"}</p>
                     </div>
-                    <span className="text-2xs font-mono font-bold text-ink-muted shrink-0">
-                      {scan.confidence}%
+                    <span className={`badge ${conf >= 90 ? "badge-success" : conf >= 70 ? "badge-warning" : "badge-danger"} font-mono font-bold shrink-0`}>
+                      {conf}%
                     </span>
                   </div>
                 );
               })}
             </div>
-
           )}
         </div>
 

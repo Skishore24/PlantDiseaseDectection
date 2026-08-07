@@ -1,5 +1,6 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { getInitials } from "./HeaderNav";
 import {
   LayoutDashboard,
   Scan,
@@ -149,8 +150,8 @@ export default function Sidebar({ isOpen, onClose }) {
         <div className="px-3 pb-4 border-t border-border pt-3 shrink-0">
           {user ? (
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center text-xs font-bold shrink-0">
-                {user.name ? user.name[0].toUpperCase() : <User className="w-4 h-4" />}
+              <div className="w-9 h-9 rounded-full bg-brand text-white flex items-center justify-center text-xs font-extrabold shrink-0 tracking-wider shadow-xs">
+                {user.name ? getInitials(user.name) : <User className="w-4 h-4" />}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-ink truncate leading-none">

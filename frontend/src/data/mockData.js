@@ -128,7 +128,7 @@ export const MOCK_FAQS = [
     id: "faq-1",
     category: "Model & AI Accuracy",
     question: "What is the neural model architecture and diagnostic precision?",
-    answer: "Our deep learning pathomics engine utilizes a custom PyTorch Convolutional Neural Network trained on over 54,000 high-resolution agricultural foliage images. It delivers 98.4% top-1 accuracy across 38 distinct crop disease classes."
+    answer: "Our deep learning pathomics engine utilizes advanced Convolutional Neural Vision Networks trained on over 54,000 high-resolution agricultural foliage images. It delivers 98.4% top-1 accuracy across 38 distinct crop disease classes."
   },
   {
     id: "faq-2",

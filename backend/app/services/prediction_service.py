@@ -115,6 +115,16 @@ class PredictionService:
         except Exception as e:
             logger.exception(f"Failed to load class names: {e}")
             _class_names = []
+
+        if not _class_names:
+            _class_names = [
+                "Pepper__bell___Bacterial_spot", "Pepper__bell___healthy",
+                "Potato___Early_blight", "Potato___Late_blight", "Potato___healthy",
+                "Tomato_Bacterial_spot", "Tomato_Early_blight", "Tomato_Late_blight",
+                "Tomato_Leaf_Mold", "Tomato_Septoria_leaf_spot", "Tomato_Spider_mites_Two_spotted_spider_mite",
+                "Tomato__Target_Spot", "Tomato__Tomato_YellowLeaf__Curl_Virus", "Tomato__Tomato_mosaic_virus",
+                "Tomato_healthy"
+            ]
         return _class_names
 
     def _load_model(self):
@@ -244,6 +254,7 @@ class PredictionService:
             disease = class_names[idx] if idx < len(class_names) else "Unknown Disease"
             if disease == "PlantVillage" and len(top3) > 0:
                 disease = top3[0]["name"]
+                confidence = top3[0]["conf"]
             advisory = get_agronomic_advisory(disease)
 
             return {
@@ -305,8 +316,11 @@ class PredictionService:
         if coll is not None:
             try:
                 query = {"user_id": user_id} if user_id and user_id != "unknown" else {}
-                cursor = coll.find(query, {"_id": 0}).sort("timestamp", -1).limit(limit)
+                cursor = coll.find(query).sort("timestamp", -1).limit(limit)
                 for item in list(cursor):
+                    if "_id" in item:
+                        item["id"] = str(item["_id"])
+                        del item["_id"]
                     if "timestamp" in item and isinstance(item["timestamp"], datetime):
                         item["scanned_at"] = item["timestamp"].isoformat()
                     mongo_items.append(item)
@@ -323,15 +337,79 @@ class PredictionService:
         all_items = mongo_items + local_items
         seen = set()
         unique = []
-        for it in all_items:
+        for idx, it in enumerate(all_items):
             key = (it.get("disease"), it.get("scanned_at"))
             if key not in seen:
                 seen.add(key)
+                if not it.get("id"):
+                    it["id"] = f"{it.get('disease')}-{it.get('scanned_at') or idx}"
                 if not it.get("img_url") and it.get("img_path"):
                     it["img_url"] = f"/uploads/{it['img_path']}"
                 unique.append(it)
 
         return unique[:limit]
+
+    def delete_history_item(self, target_id: str, user_id: Optional[str] = None) -> bool:
+        deleted = False
+        coll = self._get_collection()
+
+        # 1. Try deleting from MongoDB
+        if coll is not None:
+            try:
+                from bson import ObjectId
+                if ObjectId.is_valid(target_id):
+                    res = coll.delete_one({"_id": ObjectId(target_id)})
+                    if res.deleted_count > 0:
+                        deleted = True
+                else:
+                    res = coll.delete_one({"$or": [{"id": target_id}, {"disease": target_id}]})
+                    if res.deleted_count > 0:
+                        deleted = True
+            except Exception as e:
+                logger.error(f"Error deleting history item from MongoDB: {e}")
+
+        # 2. Delete from local JSON file
+        try:
+            local_items = _load_local_history()
+            new_local = []
+            for x in local_items:
+                item_id = x.get("id") or f"{x.get('disease')}-{x.get('scanned_at') or x.get('timestamp')}"
+                if item_id == target_id or x.get("id") == target_id:
+                    deleted = True
+                    continue
+                new_local.append(x)
+
+            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump(new_local, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error updating local history file: {e}")
+
+        return deleted
+
+    def delete_history_batch(self, target_ids: List[str], user_id: Optional[str] = None) -> int:
+        count = 0
+        for tid in target_ids:
+            if self.delete_history_item(tid, user_id):
+                count += 1
+        return count
+
+    def clear_user_history(self, user_id: Optional[str] = None) -> bool:
+        coll = self._get_collection()
+        if coll is not None:
+            try:
+                res = coll.delete_many({})
+                logger.info(f"Cleared {res.deleted_count} documents from MongoDB predictions collection.")
+            except Exception as e:
+                logger.error(f"Error clearing MongoDB history: {e}")
+
+        try:
+            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump([], f)
+            logger.info("Cleared local history_store.json file.")
+        except Exception as e:
+            logger.error(f"Error clearing local history file: {e}")
+
+        return True
 
     def get_stats(self) -> Dict[str, Any]:
         coll = self._get_collection()

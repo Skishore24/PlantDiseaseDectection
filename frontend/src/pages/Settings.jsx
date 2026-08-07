@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import { User, Lock, Cpu, Bell, Trash2, Save, CheckCircle2, ShieldCheck } from "lucide-react";
+import { createPortal } from "react-dom";
+import { User, Lock, Cpu, Bell, Trash2, Save, CheckCircle2, ShieldCheck, AlertTriangle, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const TABS = [
   { id: "profile",       label: "Profile",       icon: User  },
   { id: "security",      label: "Security",       icon: Lock  },
-  { id: "engine",        label: "Engine Status",  icon: Cpu   },
   { id: "notifications", label: "Notifications",  icon: Bell  },
   { id: "danger",        label: "Danger Zone",    icon: Trash2, danger: true },
 ];
@@ -14,6 +14,8 @@ export default function Settings() {
   const { user }   = useAuth();
   const [tab,      setTab]    = useState("profile");
   const [saved,    setSaved]  = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [cleared,  setCleared] = useState(false);
   const [form,     setForm]   = useState({
     name:          user?.name    || "Enterprise Admin",
     email:         user?.email   || "admin@plantai.io",
@@ -26,6 +28,13 @@ export default function Settings() {
     e.preventDefault();
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handleWipeHistory = () => {
+    localStorage.removeItem("plant_scans");
+    setShowConfirmModal(false);
+    setCleared(true);
+    setTimeout(() => setCleared(false), 4000);
   };
 
   return (
@@ -115,45 +124,7 @@ export default function Settings() {
           </div>
         )}
 
-        {tab === "engine" && (
-          <div className="space-y-5">
-            <h3 className="text-sm font-semibold text-ink">ML Neural Engine &amp; Infrastructure</h3>
-            
-            <div className="p-4 rounded-lg bg-brand-light border border-brand-border space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-brand flex items-center justify-center text-white shrink-0">
-                  <Cpu className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-success-text">100% Local PyTorch CUDA Engine</h4>
-                  <p className="text-xs text-success-text/80">Self-Hosted Deep Learning Pipeline</p>
-                </div>
-              </div>
-              <p className="text-xs text-success-text/90 leading-relaxed font-medium">
-                This application runs completely on your own machine's hardware using PyTorch and CUDA GPU acceleration. No cloud API keys, paid tokens, or third-party AI models are required.
-              </p>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-lg border border-border bg-bg-subtle">
-                <span className="font-semibold text-ink-muted block text-2xs uppercase">Framework</span>
-                <span className="font-bold text-ink text-sm">PyTorch 2.x</span>
-              </div>
-              <div className="p-3 rounded-lg border border-border bg-bg-subtle">
-                <span className="font-semibold text-ink-muted block text-2xs uppercase">Hardware Acceleration</span>
-                <span className="font-bold text-ink text-sm">NVIDIA CUDA GPU</span>
-              </div>
-              <div className="p-3 rounded-lg border border-border bg-bg-subtle">
-                <span className="font-semibold text-ink-muted block text-2xs uppercase">API Key Requirement</span>
-                <span className="font-bold text-success text-sm">None (100% Local)</span>
-              </div>
-              <div className="p-3 rounded-lg border border-border bg-bg-subtle">
-                <span className="font-semibold text-ink-muted block text-2xs uppercase">Model Weights</span>
-                <span className="font-bold text-ink text-sm">MobileNetV3 / ResNet</span>
-              </div>
-            </div>
-          </div>
-        )}
 
         {tab === "notifications" && (
           <div className="space-y-5">
@@ -183,6 +154,14 @@ export default function Settings() {
         {tab === "danger" && (
           <div className="space-y-5">
             <h3 className="text-sm font-semibold text-danger">Danger Zone</h3>
+
+            {cleared && (
+              <div className="flex items-center gap-2 p-3.5 text-xs font-semibold text-success-text bg-success-bg border border-success-border rounded-lg animate-fade-in">
+                <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                <span>Scan history cleared successfully!</span>
+              </div>
+            )}
+
             <div className="p-4 rounded-lg border border-danger-border bg-danger-bg">
               <p className="text-sm font-medium text-danger-text mb-1">Wipe Scan History</p>
               <p className="text-xs text-danger-text/70 mb-3 leading-relaxed">
@@ -190,7 +169,7 @@ export default function Settings() {
               </p>
               <button
                 type="button"
-                onClick={() => { localStorage.removeItem("plant_scans"); alert("Scan history cleared."); }}
+                onClick={() => setShowConfirmModal(true)}
                 className="btn btn-danger btn-sm"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -217,6 +196,56 @@ export default function Settings() {
         )}
       </form>
 
+      {/* Confirmation Modal Popup Portal */}
+      {showConfirmModal && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-surface border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl relative space-y-4 animate-slide-up">
+            <button
+              type="button"
+              onClick={() => setShowConfirmModal(false)}
+              className="absolute top-4 right-4 p-1.5 text-ink-muted hover:text-ink hover:bg-bg-subtle rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-danger-bg text-danger border border-danger-border flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-ink">Clear Scan History?</h3>
+                <p className="text-xs text-ink-muted mt-0.5">Action requires confirmation</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-ink-body leading-relaxed">
+              Are you sure you want to permanently delete all locally stored diagnostic records? This action cannot be undone.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="btn btn-secondary btn-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleWipeHistory}
+                className="btn btn-danger btn-sm"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Yes, Wipe History
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   );
 }
+
+

@@ -102,7 +102,7 @@ export default function FAQ() {
           Contact our agronomic support team for tailored guidance.
         </p>
         <a
-          href="mailto:support@plantai.io"
+          href="mailto:kishoresenthil2405@gmail.com"
           className="btn btn-sm inline-flex"
           style={{ backgroundColor: "#16A34A", color: "#FFF" }}
         >

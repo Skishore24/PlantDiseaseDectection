@@ -54,7 +54,7 @@ const FEATURES = [
 
 const STEPS = [
   { num: "01", title: "Upload or Capture",  desc: "Take a photo of the affected leaf or upload from your device." },
-  { num: "02", title: "AI Analyzes",        desc: "Our MobileNetV3 / ResNet model processes the image in under 2 seconds." },
+  { num: "02", title: "AI Analyzes",        desc: "Our AI diagnostic model processes the image in under 2 seconds." },
   { num: "03", title: "Get Diagnosis",      desc: "Receive the disease name, confidence score, and top 3 probable matches." },
   { num: "04", title: "Follow Treatment",   desc: "View tailored organic and chemical treatment protocols immediately." },
 ];
@@ -186,8 +186,8 @@ export default function Landing() {
             {/* Trust Badges */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6 text-xs text-ink-muted font-medium">
               {[
-                "Instant PyTorch / MobileNet Inference",
-                "MongoDB Atlas Verified",
+                "Instant AI Foliage Inference",
+                "Cloud Database Verified",
                 "38 Crop Diseases",
               ].map((t) => (
                 <div key={t} className="flex items-center gap-1.5">
@@ -243,8 +243,8 @@ export default function Landing() {
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-ink">PyTorch CUDA Engine</div>
-                  <div className="text-2xs text-ink-muted">128×128 Neural Net</div>
+                  <div className="text-xs font-bold text-ink">AI Diagnostic Engine</div>
+                  <div className="text-2xs text-ink-muted">Neural Network Vision</div>
                 </div>
               </div>
             </div>
@@ -423,7 +423,7 @@ export default function Landing() {
             <Link to="/register" className="hover:text-ink transition-colors">Register</Link>
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-brand" />
-              <span className="font-mono font-medium text-ink">PyTorch CUDA Engine</span>
+              <span className="font-mono font-medium text-ink">AI Pathomics Engine</span>
             </div>
           </div>
         </div>

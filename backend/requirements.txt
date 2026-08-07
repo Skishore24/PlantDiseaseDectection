@@ -1,34 +1,19 @@
-# Plant AI — Python Dependencies
-# ==========================================
-
-# ── Web Framework ──────────────────────────
+# Plant AI — Root Requirements for Vercel Serverless & Local
 fastapi>=0.110.0
 pydantic-settings>=2.0.0
 email-validator>=2.0.0
-uvicorn[standard]>=0.29.0
+uvicorn>=0.29.0
 python-multipart>=0.0.9
-
-# ── AI / Machine Learning ──────────────────
-# PyTorch (Supported across Python 3.10, 3.11, 3.12, 3.13, 3.14)
-torch>=2.0.0
-torchvision>=0.15.0
 pillow>=10.2.0
 numpy>=1.24.0
-scikit-learn>=1.2.0
-
-# TensorFlow (Optional fallback for Python <= 3.12)
-# tensorflow>=2.10.0
-
-# ── Database ───────────────────────────────
 pymongo[srv]>=4.6.2
 python-dotenv>=1.0.1
 certifi
-
-# ── Authentication ─────────────────────────
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 bcrypt>=4.0.0
-
-# ── Data Utilities & Kaggle Download ───────
-kagglehub>=0.2.0
+scikit-learn>=1.2.0
 pyyaml>=6.0
+torch>=2.0.0
+torchvision>=0.15.0
+kagglehub>=0.2.0

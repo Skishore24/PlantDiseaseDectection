@@ -8,7 +8,7 @@ export default function Footer() {
         <span>•</span>
         <span>Agricultural Disease Intelligence Platform</span>
       </div>
-      <p>© 2026 Statify Plant AI — Next-Gen Crop Pathology &amp; Diagnostics. Built with PyTorch &amp; Vite.</p>
+      <p>© 2026 Statify Plant AI — Next-Gen Crop Pathology &amp; Diagnostics. Built with React &amp; Vite.</p>
     </footer>
   );
 }

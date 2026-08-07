@@ -29,7 +29,7 @@ export function generatePDFReport(scanResult) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(203, 213, 225);
-    doc.text("Enterprise Neural Pathology Platform v5.2 | PyTorch CUDA Engine", 14, 28);
+    doc.text("Enterprise Neural Pathology Platform v5.2 | AI Pathology Platform", 14, 28);
     doc.text(`Report ID: SCAN-${Date.now().toString().slice(-8)} | Generated: ${timestamp}`, 14, 34);
 
     // Section 1: Summary Box

@@ -197,7 +197,7 @@ export default function Sidebar({
                 <span>Engine</span>
               </span>
               <span className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                {isLive ? "PyTorch CUDA" : "Demo Mode"}
+                {isLive ? "Online" : "Demo Mode"}
               </span>
             </div>
           </div>

@@ -40,8 +40,8 @@ export default function HistoryModal({ item, onClose }) {
           </div>
 
           <div className="flex justify-between items-center">
-            <span className="text-xs text-slate-400">Assessment Engine:</span>
-            <span className="text-xs text-slate-300 font-mono">PyTorch CUDA v5.2</span>
+            <span className="text-xs text-slate-400">Diagnostic Status:</span>
+            <span className="text-xs text-emerald-400 font-mono">Verified</span>
           </div>
         </div>
 

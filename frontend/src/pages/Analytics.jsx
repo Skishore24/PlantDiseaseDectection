@@ -77,7 +77,7 @@ export default function Analytics() {
         <div>
           <h2 className="text-xl font-bold text-ink">Analytics &amp; Diagnostic Telemetry</h2>
           <p className="text-sm text-ink-muted mt-0.5">
-            Real-time diagnostic metrics from your local PyTorch CUDA engine
+            Real-time diagnostic metrics and system performance
           </p>
         </div>
 
@@ -91,7 +91,7 @@ export default function Analytics() {
           </button>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-light border border-brand-border">
             <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
-            <span className="text-xs font-semibold text-success-text font-mono">Live · PyTorch CUDA</span>
+            <span className="text-xs font-semibold text-success-text font-mono">Live System</span>
           </div>
         </div>
       </div>

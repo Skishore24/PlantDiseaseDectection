@@ -58,7 +58,7 @@ export async function checkBackendHealth() {
       return {
         online: true,
         status: data.model_status || "live",
-        engine: data.engine || "PyTorch MobileNetV3 · CUDA GPU",
+        engine: data.engine || "AI Diagnostic Vision Model",
       };
     }
   } catch {
@@ -157,4 +157,52 @@ export async function fetchAnalyticsData() {
   }
   return null;
 }
+
+/**
+ * Delete a single history item from MongoDB and storage
+ */
+export async function deleteHistoryItem(id) {
+  try {
+    const res = await apiFetch(`/history/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("Failed to delete history item:", err);
+    return false;
+  }
+}
+
+/**
+ * Batch delete selected history items from MongoDB and storage
+ */
+export async function deleteHistoryBatch(ids) {
+  try {
+    const res = await apiFetch("/history/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("Failed to batch delete history items:", err);
+    return false;
+  }
+}
+
+/**
+ * Clear all history from MongoDB and storage
+ */
+export async function clearAllHistory() {
+  try {
+    const res = await apiFetch("/history", {
+      method: "DELETE",
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("Failed to clear history:", err);
+    return false;
+  }
+}
+
 

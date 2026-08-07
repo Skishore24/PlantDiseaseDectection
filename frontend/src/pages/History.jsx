@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Search, Trash2, Download, Calendar, Leaf, Clock, X, RefreshCw } from "lucide-react";
-import { fetchHistory } from "../utils/api";
+import { createPortal } from "react-dom";
+import { Search, Trash2, Download, Calendar, Leaf, Clock, X, RefreshCw, AlertTriangle, CheckSquare, Square } from "lucide-react";
+import { fetchHistory, deleteHistoryItem, deleteHistoryBatch, clearAllHistory } from "../utils/api";
 import { generatePDFReport } from "../utils/pdfExport";
 
 const FILTERS = [
@@ -11,11 +12,15 @@ const FILTERS = [
 ];
 
 export default function History() {
-  const [history,   setHistory]   = useState([]);
-  const [query,     setQuery]     = useState("");
-  const [filter,    setFilter]    = useState("all");
-  const [sortBy,    setSortBy]    = useState("date");
-  const [isLoading, setIsLoading] = useState(true);
+  const [history,      setHistory]      = useState([]);
+  const [query,        setQuery]        = useState("");
+  const [filter,       setFilter]       = useState("all");
+  const [sortBy,       setSortBy]       = useState("date");
+  const [isLoading,    setIsLoading]    = useState(true);
+  const [selectedIds,  setSelectedIds]  = useState(new Set());
+  const [confirmModal, setConfirmModal] = useState(null); // null | { type: "single"|"selected"|"all", id?: string }
+
+  const getItemId = (item, idx) => item._id || item.id || `${item.disease}-${item.scanned_at || item.timestamp || idx}`;
 
   const loadHistory = async () => {
     setIsLoading(true);
@@ -51,6 +56,55 @@ export default function History() {
       return 0;
     });
 
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length && filtered.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      const newSet = new Set();
+      filtered.forEach((item, idx) => newSet.add(getItemId(item, idx)));
+      setSelectedIds(newSet);
+    }
+  };
+
+  const toggleSelectItem = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmModal) return;
+
+    if (confirmModal.type === "all") {
+      setHistory([]);
+      setSelectedIds(new Set());
+      localStorage.removeItem("plant_scans");
+      await clearAllHistory();
+    } else if (confirmModal.type === "selected") {
+      const idsToDelete = Array.from(selectedIds);
+      setHistory((prev) => prev.filter((item, idx) => !selectedIds.has(getItemId(item, idx))));
+      setSelectedIds(new Set());
+      await deleteHistoryBatch(idsToDelete);
+    } else if (confirmModal.type === "single") {
+      const targetId = confirmModal.id;
+      setHistory((prev) => prev.filter((item, idx) => getItemId(item, idx) !== targetId));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(targetId);
+        return next;
+      });
+      await deleteHistoryItem(targetId);
+    }
+
+    setConfirmModal(null);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
 
@@ -59,18 +113,63 @@ export default function History() {
         <div>
           <h2 className="text-xl font-bold text-ink">Scan History</h2>
           <p className="text-sm text-ink-muted mt-0.5">
-            {history.length} diagnostic record{history.length !== 1 ? "s" : ""} in MongoDB Atlas database
+            {history.length} diagnostic record{history.length !== 1 ? "s" : ""} in database
           </p>
         </div>
 
-        <button
-          onClick={loadHistory}
-          className="btn btn-secondary btn-sm gap-1.5 self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh Database
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={loadHistory}
+            className="btn btn-secondary btn-sm gap-1.5"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh Database
+          </button>
+          {history.length > 0 && (
+            <button
+              onClick={() => setConfirmModal({ type: "all" })}
+              className="btn btn-danger btn-sm gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear History
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Selection Action Bar (when items are selected) */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between p-3.5 rounded-xl bg-brand-light border border-brand-border animate-fade-in">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center gap-2 text-xs font-bold text-success-text"
+            >
+              {selectedIds.size === filtered.length && filtered.length > 0 ? (
+                <CheckSquare className="w-4 h-4 text-brand" />
+              ) : (
+                <Square className="w-4 h-4 text-ink-muted" />
+              )}
+              <span>{selectedIds.size} of {filtered.length} selected</span>
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="btn btn-ghost btn-sm text-ink-muted hover:text-ink"
+            >
+              Deselect All
+            </button>
+            <button
+              onClick={() => setConfirmModal({ type: "selected" })}
+              className="btn btn-danger btn-sm gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Selected ({selectedIds.size})
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -121,7 +220,7 @@ export default function History() {
       {isLoading ? (
         <div className="card py-16 text-center">
           <RefreshCw className="w-8 h-8 text-brand animate-spin mx-auto mb-3" />
-          <p className="text-sm font-semibold text-ink">Loading MongoDB Scan Records…</p>
+          <p className="text-sm font-semibold text-ink">Loading Scan Records…</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="card py-16 text-center">
@@ -134,6 +233,8 @@ export default function History() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((item, idx) => {
+            const id = getItemId(item, idx);
+            const isSelected = selectedIds.has(id);
             const diseaseStr = item.disease || "Unknown Disease";
             const healthy = diseaseStr.toLowerCase().includes("healthy");
             const conf    = Math.round(item.confidence || 0);
@@ -145,13 +246,37 @@ export default function History() {
               "badge-danger";
 
             return (
-              <div key={idx} className="card-hover p-5 flex flex-col gap-3">
+              <div
+                key={id}
+                className={`card-hover p-5 flex flex-col gap-3 transition-all relative ${
+                  isSelected ? "border-brand ring-1 ring-brand bg-brand-light/30" : ""
+                }`}
+              >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs text-ink-muted">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>{timestampStr ? new Date(timestampStr).toLocaleString() : "Recent"}</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelectItem(id)}
+                      className="w-4 h-4 accent-brand rounded cursor-pointer"
+                    />
+                    <div className="flex items-center gap-1.5 text-xs text-ink-muted">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>{timestampStr ? new Date(timestampStr).toLocaleString() : "Recent"}</span>
+                    </div>
                   </div>
-                  <span className={`badge ${confBadge}`}>{conf}% match</span>
+
+                  <div className="flex items-center gap-2">
+                    <span className={`badge ${confBadge}`}>{conf}% match</span>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmModal({ type: "single", id })}
+                      className="p-1 rounded text-ink-muted hover:text-danger hover:bg-danger-bg transition-colors"
+                      title="Delete record"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -182,7 +307,7 @@ export default function History() {
                     <Download className="w-3.5 h-3.5" />
                     Export PDF Report
                   </button>
-                  <span className="text-2xs font-mono text-ink-muted">PyTorch CUDA Sync</span>
+                  <span className="text-2xs font-mono text-ink-muted">Auto Sync</span>
                 </div>
               </div>
             );
@@ -191,6 +316,69 @@ export default function History() {
         </div>
       )}
 
+      {/* Confirmation Modal Popup Portal */}
+      {confirmModal && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-surface border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl relative space-y-4 animate-slide-up">
+            <button
+              type="button"
+              onClick={() => setConfirmModal(null)}
+              className="absolute top-4 right-4 p-1.5 text-ink-muted hover:text-ink hover:bg-bg-subtle rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-danger-bg text-danger border border-danger-border flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-ink">
+                  {confirmModal.type === "all"
+                    ? "Clear Entire Scan History?"
+                    : confirmModal.type === "selected"
+                    ? `Delete ${selectedIds.size} Selected Record${selectedIds.size > 1 ? "s" : ""}?`
+                    : "Delete Scan Record?"}
+                </h3>
+                <p className="text-xs text-ink-muted mt-0.5">This action requires confirmation</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-ink-body leading-relaxed">
+              {confirmModal.type === "all"
+                ? `Are you sure you want to permanently delete ALL ${history.length} diagnostic records? This action cannot be undone.`
+                : confirmModal.type === "selected"
+                ? `Are you sure you want to delete ${selectedIds.size} selected scan record(s)? This action cannot be undone.`
+                : "Are you sure you want to delete this scan record? This action cannot be undone."}
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(null)}
+                className="btn btn-secondary btn-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="btn btn-danger btn-sm"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {confirmModal.type === "all"
+                  ? "Yes, Clear All History"
+                  : confirmModal.type === "selected"
+                  ? `Yes, Delete Selected (${selectedIds.size})`
+                  : "Yes, Delete Record"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   );
 }
+
