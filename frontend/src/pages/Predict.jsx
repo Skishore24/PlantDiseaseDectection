@@ -262,6 +262,22 @@ export default function Predict() {
               transition={{ duration: 0.2 }}
               className="space-y-5"
             >
+              {/* Low Confidence / Out of Distribution Warning Banner */}
+              {(confidence < 55 || scanResult.low_confidence_warning) && (
+                <div className="rounded-xl p-4 bg-amber-500/10 border border-amber-500/30 text-amber-900 flex items-start gap-3 shadow-sm">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="text-xs space-y-1">
+                    <p className="font-bold text-amber-700">
+                      ⚠️ Low Match Confidence ({confidence}%) — Possible Unsupported Plant Species
+                    </p>
+                    <p className="text-amber-800/90 leading-relaxed">
+                      {scanResult.low_confidence_warning ||
+                        "This leaf image does not strongly match the 38 trained classes (Tomato, Potato, Apple, Pepper, Grape, etc.). The plant species (e.g. Pear tree) may be unsupported or visual features are ambiguous."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Main Status Header */}
               <div className={`rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border ${
                 isHealthy

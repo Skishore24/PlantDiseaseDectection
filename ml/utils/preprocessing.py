@@ -1,20 +1,20 @@
 # ml/utils/preprocessing.py
-import tensorflow as tf
-from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from PIL import Image
 
 def get_preprocessing_function():
     """
-    Returns the standard MobileNetV2 preprocessing function.
+    Returns standard ImageNet normalization transform parameters.
     """
-    return preprocess_input
+    return {
+        "mean": [0.485, 0.456, 0.406],
+        "std": [0.229, 0.224, 0.225]
+    }
 
-def load_and_prep_image(img_path, img_size=(128, 128)):
+def load_and_prep_image(img_path, img_size=(224, 224)):
     """
-    Loads and prepares a single image for inference with batch dimension.
+    Loads and resizes a single image for model inference.
     """
-    img = tf.io.read_file(img_path)
-    img = tf.image.decode_image(img, channels=3)
-    img = tf.image.resize(img, img_size)
-    img = preprocess_input(img)
-    return tf.expand_dims(img, axis=0)
+    img = Image.open(img_path).convert("RGB")
+    return img.resize(img_size)
+
 

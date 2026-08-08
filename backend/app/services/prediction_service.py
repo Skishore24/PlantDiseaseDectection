@@ -22,7 +22,7 @@ os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
 # ─────────────────────────────────────────────
 # ML CONSTANTS & SINGLETON STATE
 # ─────────────────────────────────────────────
-IMG_SIZE = (128, 128)
+IMG_SIZE = (224, 224)
 _model = None
 _model_type = None  # 'pytorch', 'tensorflow', 'onnx', or 'demo'
 _model_lock = threading.Lock()
@@ -145,20 +145,26 @@ class PredictionService:
                     num_classes = len(class_names) if class_names else 15
 
                     state_dict = torch.load(pth_path, map_location=torch.device("cpu"))
-                    try:
-                        model = models.mobilenet_v3_large(weights=None)
-                        model.classifier[3] = nn.Linear(model.classifier[3].in_features, num_classes)
-                        model.load_state_dict(state_dict)
-                    except Exception:
-                        model = models.mobilenet_v3_small(weights=None)
-                        model.classifier[3] = nn.Linear(model.classifier[3].in_features, num_classes)
-                        model.load_state_dict(state_dict)
+                    ckpt_num_classes = state_dict.get("classifier.3.weight", torch.zeros((num_classes, 1))).shape[0]
 
-                    model.eval()
-                    _model = model
-                    _model_type = "pytorch"
-                    logger.info("✅ PyTorch high-accuracy model loaded successfully!")
-                    return _model, _model_type
+                    loaded_model = None
+                    for arch_fn in [models.mobilenet_v3_large, models.mobilenet_v3_small]:
+                        try:
+                            m = arch_fn(weights=None)
+                            in_features = m.classifier[3].in_features
+                            m.classifier[3] = nn.Linear(in_features, ckpt_num_classes)
+                            m.load_state_dict(state_dict)
+                            loaded_model = m
+                            logger.info(f"✅ PyTorch model ({arch_fn.__name__}) loaded successfully with {ckpt_num_classes} classes!")
+                            break
+                        except Exception as ex:
+                            logger.debug(f"Failed loading with {arch_fn.__name__}: {ex}")
+
+                    if loaded_model is not None:
+                        loaded_model.eval()
+                        _model = loaded_model
+                        _model_type = "pytorch"
+                        return _model, _model_type
                 except Exception as e:
                     logger.error(f"Failed loading PyTorch model: {e}")
 
@@ -257,11 +263,22 @@ class PredictionService:
                 confidence = top3[0]["conf"]
             advisory = get_agronomic_advisory(disease)
 
+            low_confidence_warning = None
+            if confidence < 55.0:
+                low_confidence_warning = (
+                    f"Low confidence diagnosis ({confidence:.1f}% match). "
+                    "The leaf may belong to an unsupported plant species (e.g. Pear tree, which is not in the 38 trained dataset classes) "
+                    "or the visual symptoms may be ambiguous."
+                )
+                if isinstance(advisory, dict) and "description" in advisory:
+                    advisory["warning"] = low_confidence_warning
+
             return {
                 "disease": disease,
                 "confidence": round(confidence, 2),
                 "top3": top3,
                 "advisory": advisory,
+                "low_confidence_warning": low_confidence_warning,
                 "demo": False
             }
 
