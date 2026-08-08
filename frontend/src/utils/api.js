@@ -2,8 +2,7 @@
 //  api.js — Authenticated API utility layer
 //  All requests to the backend go through these helpers.
 //  JWT token is automatically attached from localStorage.
-// ═══════════════════════════════════════════════════════════════════════
-
+//  api.js — Authenticated API utility layer (v1.0.1)
 const API_BASE = (import.meta.env.VITE_API_BASE || "/api/v1").replace(/\/$/, "");
 
 // ── Token helper ────────────────────────────────────────────────────────
