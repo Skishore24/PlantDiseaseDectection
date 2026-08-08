@@ -15,9 +15,37 @@ from app.db.mongo import mongo_db
 
 logger = logging.getLogger(__name__)
 
-# Local fallback store for history & stats persistence
-HISTORY_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "logs", "history_store.json")
-os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+import tempfile
+
+def _get_history_file() -> str:
+    try:
+        log_dir = os.path.join(os.path.dirname(__file__), "..", "..", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        return os.path.join(log_dir, "history_store.json")
+    except Exception:
+        return os.path.join(tempfile.gettempdir(), "history_store.json")
+
+
+def _load_local_history() -> List[Dict[str, Any]]:
+    filepath = _get_history_file()
+    if not os.path.exists(filepath):
+        return []
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed loading local history file: {e}")
+        return []
+
+
+def _save_local_history(history: List[Dict[str, Any]]):
+    try:
+        filepath = _get_history_file()
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2)
+    except Exception as e:
+        logger.error(f"Failed saving local history file: {e}")
 
 # ─────────────────────────────────────────────
 # ML CONSTANTS & SINGLETON STATE

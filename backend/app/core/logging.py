@@ -2,18 +2,13 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-# ─────────────────────────────────────────────
-# CONFIG
-# ─────────────────────────────────────────────
 LOG_DIR = "logs"
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
-
-os.makedirs(LOG_DIR, exist_ok=True)
 
 
 def setup_logging():
     """
-    Configure application-wide logging.
+    Configure application-wide logging safely for local & serverless.
     """
 
     logger = logging.getLogger()
@@ -23,36 +18,29 @@ def setup_logging():
     if logger.handlers:
         return
 
-    # ─────────────────────────────
-    # FORMAT
-    # ─────────────────────────────
     formatter = logging.Formatter(
         "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
     )
 
-    # ─────────────────────────────
-    # FILE HANDLER (ROTATING)
-    # ─────────────────────────────
-    file_handler = RotatingFileHandler(
-        LOG_FILE,
-        maxBytes=5 * 1024 * 1024,  # 5MB
-        backupCount=3,
-        encoding="utf-8"
-    )
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(formatter)
-
-    # ─────────────────────────────
-    # CONSOLE HANDLER
-    # ─────────────────────────────
+    # Console Handler (always works everywhere)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
-
-    # ─────────────────────────────
-    # ADD HANDLERS
-    # ─────────────────────────────
-    logger.addHandler(file_handler)
     logger.addHandler(console_handler)
+
+    # Optional File Handler (if filesystem is writable)
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        file_handler = RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=5 * 1024 * 1024,  # 5MB
+            backupCount=3,
+            encoding="utf-8"
+        )
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except Exception:
+        pass
 
     logger.info("✅ Logging initialized")

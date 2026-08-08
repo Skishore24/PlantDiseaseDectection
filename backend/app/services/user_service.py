@@ -9,17 +9,24 @@ from app.core.security import get_password_hash, verify_password
 
 logger = logging.getLogger(__name__)
 
-# Persistent local user store file
-USERS_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "logs", "users_store.json")
-os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
+import tempfile
+
+def _get_users_file() -> str:
+    try:
+        log_dir = os.path.join(os.path.dirname(__file__), "..", "..", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        return os.path.join(log_dir, "users_store.json")
+    except Exception:
+        return os.path.join(tempfile.gettempdir(), "users_store.json")
 
 
 def _load_local_users() -> Dict[str, Dict[str, Any]]:
     """Loads local user database from JSON file."""
-    if not os.path.exists(USERS_FILE):
+    filepath = _get_users_file()
+    if not os.path.exists(filepath):
         return {}
     try:
-        with open(USERS_FILE, "r", encoding="utf-8") as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         logger.error(f"Failed loading local users file: {e}")
@@ -32,9 +39,11 @@ def _save_local_user(user_dict: Dict[str, Any]):
         users = _load_local_users()
         email = user_dict["email"].lower().strip()
         users[email] = user_dict
-        with open(USERS_FILE, "w", encoding="utf-8") as f:
+        filepath = _get_users_file()
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(users, f, indent=2)
-        logger.info(f"✅ Saved user locally to {USERS_FILE}: {email}")
+        logger.info(f"✅ Saved user locally to {filepath}: {email}")
     except Exception as e:
         logger.error(f"Failed saving local user: {e}")
 

@@ -45,14 +45,20 @@ class MongoDB:
                 "socketTimeoutMS": 10000,
             }
 
-            if settings.MONGO_URI.startswith("mongodb+srv://"):
-                conn_kwargs["tls"] = True
-                conn_kwargs["tlsCAFile"] = certifi.where()
+            if settings.MONGO_URI.startswith("mongodb+srv://") or "tls=" in settings.MONGO_URI or "ssl=true" in settings.MONGO_URI.lower():
+                try:
+                    conn_kwargs["tlsCAFile"] = certifi.where()
+                except Exception:
+                    pass
 
-            self.client = MongoClient(settings.MONGO_URI, **conn_kwargs)
-
-            # Test connection
-            self.client.admin.command("ping")
+            try:
+                self.client = MongoClient(settings.MONGO_URI, **conn_kwargs)
+                self.client.admin.command("ping")
+            except Exception as ssl_err:
+                logger.warning(f"Standard SSL connection failed: {ssl_err}. Retrying with tlsAllowInvalidCertificates=True...")
+                conn_kwargs["tlsAllowInvalidCertificates"] = True
+                self.client = MongoClient(settings.MONGO_URI, **conn_kwargs)
+                self.client.admin.command("ping")
 
             self.db = self.client[settings.DATABASE_NAME]
 
