@@ -86,6 +86,11 @@ if frontend_dir.exists():
     app.mount("/app", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
 
+@app.get("/docs", include_in_schema=False)
+def redirect_docs():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"{settings.API_V1_STR}/docs")
+
 @app.get("/")
 def root():
     return {

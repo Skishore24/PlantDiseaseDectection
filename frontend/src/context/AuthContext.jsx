@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 
-const API_BASE = "/api/v1";
+const API_BASE = (import.meta.env.VITE_API_BASE || "/api/v1").replace(/\/$/, "");
 
 const AuthContext = createContext(null);
 

@@ -18,12 +18,12 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # ── Security ───────────────────────────────
-    SECRET_KEY: str
+    SECRET_KEY: str = "default_secret_key_plant_disease_ai_2026_secure_key_64_chars_min"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     # ── Database ───────────────────────────────
-    MONGO_URI: str
+    MONGO_URI: str = ""
     DATABASE_NAME: str = "plant_ai"
 
     # ── ML Model Paths (relative to project root) ─
@@ -31,8 +31,7 @@ class Settings(BaseSettings):
     CLASS_PATH: str = "ml/output/classes.json"
 
     # ── CORS ───────────────────────────────────
-    # In production, restrict to your actual domain(s)
-    BACKEND_CORS_ORIGINS: Union[List[str], str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    BACKEND_CORS_ORIGINS: Union[List[str], str] = ["*"]
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
