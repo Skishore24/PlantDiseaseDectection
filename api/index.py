@@ -12,9 +12,9 @@ for path in [str(BACKEND_DIR), str(PROJECT_ROOT), str(API_DIR)]:
         sys.path.insert(0, path)
 
 try:
-    from app.main import app
-except ImportError:
     from backend.app.main import app
+except ImportError:
+    from app.main import app  # type: ignore # pyrefly: ignore [missing-import]
 
 # Expose app for Vercel Serverless Function engine
 app = app

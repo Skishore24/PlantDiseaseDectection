@@ -38,12 +38,16 @@ def _load_local_history() -> List[Dict[str, Any]]:
         return []
 
 
-def _save_local_history(history: List[Dict[str, Any]]):
+def _save_local_history(item: Dict[str, Any]):
     try:
+        current = _load_local_history()
+        if isinstance(item, dict):
+            current.insert(0, item)
+        current = current[:200]
         filepath = _get_history_file()
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(history, f, indent=2)
+            json.dump(current, f, indent=2)
     except Exception as e:
         logger.error(f"Failed saving local history file: {e}")
 
@@ -84,28 +88,6 @@ except Exception:
     ort = None
 
 
-def _load_local_history() -> List[Dict[str, Any]]:
-    if not os.path.exists(HISTORY_FILE):
-        return []
-    try:
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-
-def _save_local_history(item: Dict[str, Any]):
-    try:
-        current = _load_local_history()
-        current.insert(0, item)
-        # Keep up to 200 records
-        current = current[:200]
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(current, f, indent=2)
-    except Exception as e:
-        logger.error(f"Failed to save local history: {e}")
-
-
 class PredictionService:
     def __init__(self):
         self.db_name = settings.DATABASE_NAME
@@ -132,7 +114,7 @@ class PredictionService:
                 logger.info(f"✅ Loaded {len(_class_names)} classes from {class_path}")
             else:
                 logger.warning(f"⚠️ Classes file missing at {class_path}. Using standard plant disease defaults.")
-                _class_names = [
+                _class_nmes = [
                     "Pepper__bell___Bacterial_spot", "Pepper__bell___healthy",
                     "Potato___Early_blight", "Potato___Late_blight", "Potato___healthy",
                     "Tomato_Bacterial_spot", "Tomato_Early_blight", "Tomato_Late_blight",
@@ -424,7 +406,9 @@ class PredictionService:
                     continue
                 new_local.append(x)
 
-            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            filepath = _get_history_file()
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(new_local, f, indent=2)
         except Exception as e:
             logger.error(f"Error updating local history file: {e}")
@@ -448,7 +432,9 @@ class PredictionService:
                 logger.error(f"Error clearing MongoDB history: {e}")
 
         try:
-            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            filepath = _get_history_file()
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump([], f)
             logger.info("Cleared local history_store.json file.")
         except Exception as e:
