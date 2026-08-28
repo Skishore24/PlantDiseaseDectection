@@ -2,12 +2,14 @@
 LeafGuard AI — Model Evaluation Pipeline
 Evaluates the trained EfficientNetB0 plant disease classification model,
 calculates Accuracy, Precision, Recall, F1-Score, Confusion Matrix, and saves model_metrics.json.
+Supports TensorFlow/Keras and PyTorch/Torchvision backends.
 """
 
 import os
 import sys
 import json
 import logging
+import argparse
 from pathlib import Path
 import numpy as np
 
@@ -16,7 +18,8 @@ TRAINING_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = TRAINING_DIR.parent
 BACKEND_MODELS_DIR = PROJECT_ROOT / "backend" / "models"
 
-MODEL_PATH = BACKEND_MODELS_DIR / "plant_disease_model.keras"
+MODEL_KERAS_PATH = BACKEND_MODELS_DIR / "plant_disease_model.keras"
+MODEL_PTH_PATH = BACKEND_MODELS_DIR / "plant_disease_model.pth"
 CLASSES_PATH = BACKEND_MODELS_DIR / "class_names.json"
 METRICS_PATH = BACKEND_MODELS_DIR / "model_metrics.json"
 
@@ -27,8 +30,8 @@ logger = logging.getLogger("LeafGuardEvalEngine")
 def find_eval_dataset_path(root_dir: Path):
     candidate_roots = [
         root_dir / "dataset",
-        root_dir / "ml" / "dataset",
         root_dir / "PlantVillage",
+        root_dir,
     ]
     for root in candidate_roots:
         if not root.exists():
@@ -46,17 +49,90 @@ def find_eval_dataset_path(root_dir: Path):
     return None
 
 
-def evaluate():
+def evaluate_pytorch(eval_path: Path, model_file: Path, class_names: list):
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import DataLoader
+    from torchvision import datasets, transforms, models
+    from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support, accuracy_score
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    num_classes = len(class_names)
+
+    val_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+    val_dataset = datasets.ImageFolder(str(eval_path), transform=val_transform)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=0)
+
+    model = models.efficientnet_b0(weights=None)
+    in_features = model.classifier[1].in_features
+    model.classifier = nn.Sequential(
+        nn.Dropout(p=0.3, inplace=False),
+        nn.Linear(in_features, 256),
+        nn.BatchNorm1d(256),
+        nn.ReLU(inplace=False),
+        nn.Dropout(p=0.2, inplace=False),
+        nn.Linear(256, num_classes)
+    )
+    state_dict = torch.load(str(model_file), map_location=device)
+    model.load_state_dict(state_dict)
+    model = model.to(device)
+    model.eval()
+
+    y_true, y_pred = [], []
+    logger.info("⚡ Generating predictions with PyTorch EfficientNetB0...")
+    with torch.no_grad():
+        for images, labels in val_loader:
+            images = images.to(device)
+            outputs = model(images)
+            _, preds = torch.max(outputs, 1)
+            y_true.extend(labels.cpu().numpy())
+            y_pred.extend(preds.cpu().numpy())
+
+    return np.array(y_true), np.array(y_pred)
+
+
+def evaluate_tensorflow(eval_path: Path, model_file: Path, class_names: list):
     import tensorflow as tf
+    from sklearn.metrics import accuracy_score
+
+    model = tf.keras.models.load_model(str(model_file), compile=False)
+    val_ds = tf.keras.utils.image_dataset_from_directory(
+        str(eval_path), image_size=(224, 224), batch_size=32, shuffle=False, label_mode="int"
+    )
+
+    y_true, y_pred = [], []
+    logger.info("⚡ Generating predictions with TensorFlow/Keras EfficientNetB0...")
+    for images, labels in val_ds:
+        preds = model.predict(images, verbose=0)
+        pred_labels = np.argmax(preds, axis=1)
+        y_true.extend(labels.numpy())
+        y_pred.extend(pred_labels)
+
+    return np.array(y_true), np.array(y_pred)
+
+
+def evaluate(dataset_dir: str = "", model_path: str = ""):
     from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support, accuracy_score
 
     logger.info("==================================================")
     logger.info("🌿 LeafGuard AI — Model Evaluation Suite")
     logger.info("==================================================")
 
-    if not MODEL_PATH.exists():
-        logger.error(f"❌ Model checkpoint not found at: {MODEL_PATH}")
-        logger.error("Please train the model first by running: python training/train_model.py")
+    # Locate model checkpoint
+    if model_path:
+        target_model = Path(model_path).resolve()
+    elif MODEL_PTH_PATH.exists():
+        target_model = MODEL_PTH_PATH
+    elif MODEL_KERAS_PATH.exists():
+        target_model = MODEL_KERAS_PATH
+    else:
+        logger.error("❌ No trained model found (.pth or .keras).")
+        logger.error("Run 'python training/train_model.py' first.")
         sys.exit(1)
 
     if not CLASSES_PATH.exists():
@@ -66,40 +142,25 @@ def evaluate():
     with open(CLASSES_PATH, "r", encoding="utf-8") as f:
         class_names = json.load(f)
 
-    eval_path = find_eval_dataset_path(PROJECT_ROOT)
+    if dataset_dir:
+        eval_path = find_eval_dataset_path(Path(dataset_dir).resolve())
+    else:
+        eval_path = find_eval_dataset_path(PROJECT_ROOT)
+
     if not eval_path:
-        logger.error(f"❌ Evaluation dataset folder not found under {PROJECT_ROOT / 'dataset'}.")
+        logger.error(f"❌ Evaluation dataset folder not found under {dataset_dir or (PROJECT_ROOT / 'dataset')}.")
         sys.exit(1)
 
     logger.info(f"📁 Loading Evaluation Data from: {eval_path}")
-    logger.info(f"📦 Loading Model from: {MODEL_PATH}")
+    logger.info(f"📦 Loading Model from: {target_model}")
 
-    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
-
-    val_ds = tf.keras.utils.image_dataset_from_directory(
-        eval_path,
-        image_size=(224, 224),
-        batch_size=32,
-        shuffle=False,
-        label_mode="int"
-    )
-
-    y_true = []
-    y_pred = []
-
-    logger.info("⚡ Generating predictions on evaluation set...")
-    for images, labels in val_ds:
-        preds = model.predict(images, verbose=0)
-        pred_labels = np.argmax(preds, axis=1)
-        y_true.extend(labels.numpy())
-        y_pred.extend(pred_labels)
-
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
+    if target_model.suffix == ".pth":
+        y_true, y_pred = evaluate_pytorch(eval_path, target_model, class_names)
+    else:
+        y_true, y_pred = evaluate_tensorflow(eval_path, target_model, class_names)
 
     acc = float(accuracy_score(y_true, y_pred))
     precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average="macro", zero_division=0)
-
     unique_labels = sorted(list(set(y_true)))
     target_names = [class_names[i] if i < len(class_names) else f"Class_{i}" for i in unique_labels]
 
@@ -132,4 +193,8 @@ def evaluate():
 
 
 if __name__ == "__main__":
-    evaluate()
+    parser = argparse.ArgumentParser(description="LeafGuard AI Model Evaluation Suite")
+    parser.add_argument("--dataset-dir", type=str, default="", help="Path to evaluation dataset")
+    parser.add_argument("--model-path", type=str, default="", help="Path to model file (.pth or .keras)")
+    args = parser.parse_args()
+    evaluate(dataset_dir=args.dataset_dir, model_path=args.model_path)

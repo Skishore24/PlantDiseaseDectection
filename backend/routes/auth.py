@@ -1,13 +1,18 @@
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 
 from backend.config import settings
-from backend.utils.security import get_password_hash, verify_password
+from backend.utils.security import (
+    get_password_hash,
+    verify_password,
+    verify_dummy_password,
+    validate_password_strength,
+)
 from backend.utils.auth import create_access_token, get_current_user
+from backend.utils.rate_limiter import auth_security_tracker
 from backend.database import db_manager, load_local_json, save_local_json
 
 logger = logging.getLogger("leafguard.auth")
@@ -30,6 +35,11 @@ class UserLoginRequest(BaseModel):
     email: Optional[EmailStr] = None
     username: Optional[str] = None
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8, max_length=100)
 
 
 class UserProfileResponse(BaseModel):
@@ -92,13 +102,43 @@ def save_user(user_data: Dict[str, Any]):
             logger.warning(f"MongoDB user save error: {e}")
 
 
+def update_user_field(email: str, updates: Dict[str, Any]):
+    email_clean = email.lower().strip()
+    # 1. Update locally
+    local_users = load_local_json("users_store.json")
+    if isinstance(local_users, dict) and email_clean in local_users:
+        local_users[email_clean].update(updates)
+        save_local_json("users_store.json", local_users)
+
+    # 2. Update in MongoDB
+    coll = db_manager.get_collection("users")
+    if coll is not None:
+        try:
+            coll.update_one({"email": email_clean}, {"$set": updates})
+        except Exception as e:
+            logger.warning(f"MongoDB update error: {e}")
+
+
 # ─────────────────────────────────────────────────────────────
 # Routes
 # ─────────────────────────────────────────────────────────────
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_in: UserRegisterRequest):
-    """Register a new user and return JWT access token."""
+async def register(user_in: UserRegisterRequest, request: Request):
+    """
+    Register a new user with strict password validation and security hashing.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Enforce strict password strength criteria
+    is_valid_pw, pw_message = validate_password_strength(user_in.password)
+    if not is_valid_pw:
+        logger.warning(f"Registration rejected due to weak password from IP {client_ip}: {pw_message}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=pw_message
+        )
+
     existing = find_user_by_email(user_in.email)
     if existing:
         raise HTTPException(
@@ -112,13 +152,15 @@ async def register(user_in: UserRegisterRequest):
         "name": user_in.name.strip(),
         "email": user_in.email.lower().strip(),
         "role": user_in.role or "Agronomist",
-        "company": user_in.company or "",
+        "company": user_in.company.strip() if user_in.company else "",
         "hashed_password": hashed_pw,
         "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_login": datetime.now(timezone.utc).isoformat(),
     }
 
     save_user(user_record)
-    logger.info(f"User registered successfully: {user_in.email}")
+    logger.info(f"✅ User registered successfully: {user_in.email} from IP {client_ip}")
 
     token = create_access_token(
         subject=user_record["email"],
@@ -140,15 +182,27 @@ async def register(user_in: UserRegisterRequest):
 
 @router.post("/login", response_model=AuthResponse)
 async def login(
-    request: Request
+    request: Request,
+    response: Response,
 ):
     """
-    Authenticate user via JSON body or form urlencoded and return JWT.
+    Authenticate user with brute-force defense, account lockout, and timing attack protection.
     """
+    client_ip = request.client.host if request.client else "127.0.0.1"
+
+    # Enforce IP login attempt velocity
+    ip_allowed, remaining_ip_tries = auth_security_tracker.is_ip_allowed(client_ip)
+    if not ip_allowed:
+        logger.warning(f"🚨 Auth IP rate limit triggered for {client_ip}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts from this network. Please wait a minute before retrying."
+        )
+
     email = None
     password = None
 
-    # Check JSON payload first
+    # Parse JSON or form data
     try:
         body = await request.json()
         if isinstance(body, dict):
@@ -157,7 +211,6 @@ async def login(
     except Exception:
         pass
 
-    # If not JSON, check form data
     if not email or not password:
         try:
             form = await request.form()
@@ -172,21 +225,65 @@ async def login(
             detail="Email and password are required."
         )
 
-    user = find_user_by_email(email)
-    if not user or not verify_password(password, user.get("hashed_password", "")):
-        logger.warning(f"Failed login attempt for: {email}")
+    email_clean = str(email).lower().strip()
+
+    # Check if account is currently locked out
+    is_locked, remaining_seconds = auth_security_tracker.is_locked(email_clean)
+    if is_locked:
+        minutes = max(1, (remaining_seconds + 59) // 60)
+        logger.warning(f"Blocked login attempt on locked account '{email_clean}' from IP {client_ip}")
+        response.headers["Retry-After"] = str(remaining_seconds)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Account temporarily locked due to multiple failed attempts. Please try again in {minutes} minute{'s' if minutes != 1 else ''}."
+        )
+
+    user = find_user_by_email(email_clean)
+
+    # Timing attack protection: run dummy verification if user is not in database
+    if not user:
+        verify_dummy_password(password)
+        count, lockout_sec = auth_security_tracker.record_failed_attempt(email_clean)
+        logger.warning(f"Failed login attempt for non-existent account: '{email_clean}' from IP {client_ip} (Attempt {count})")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Verify password
+    is_valid = verify_password(password, user.get("hashed_password", ""))
+    if not is_valid:
+        count, lockout_sec = auth_security_tracker.record_failed_attempt(email_clean)
+        logger.warning(f"Failed login attempt for: '{email_clean}' from IP {client_ip} (Attempt {count}/5)")
+
+        if lockout_sec:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Account has been temporarily locked for 15 minutes due to 5 consecutive failed login attempts.",
+                headers={"Retry-After": str(lockout_sec)}
+            )
+
+        remaining_tries = max(1, 5 - count)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Incorrect email or password. ({remaining_tries} attempt{'s' if remaining_tries != 1 else ''} remaining before temporary lockout)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Authentication Successful: Reset lockout attempt counter
+    auth_security_tracker.reset_attempts(email_clean)
+
+    # Record login telemetry
+    now_iso = datetime.now(timezone.utc).isoformat()
+    update_user_field(email_clean, {"last_login": now_iso})
+
     token = create_access_token(
         subject=user["email"],
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
-    logger.info(f"User logged in: {user['email']}")
+    logger.info(f"✅ User authenticated successfully: {user['email']} from IP {client_ip}")
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -197,6 +294,67 @@ async def login(
             "role": user.get("role", "Agronomist"),
             "company": user.get("company", "")
         }
+    }
+
+
+@router.post("/change-password")
+async def change_password(
+    data: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Secure password change endpoint requiring old password verification and strength enforcement.
+    """
+    email = current_user["email"].lower().strip()
+    user = find_user_by_email(email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User account not found."
+        )
+
+    # Verify current password
+    if not verify_password(data.current_password, user.get("hashed_password", "")):
+        logger.warning(f"Password change rejected: incorrect current password for {email}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect current password."
+        )
+
+    # Validate new password strength
+    is_valid_pw, pw_message = validate_password_strength(data.new_password)
+    if not is_valid_pw:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=pw_message
+        )
+
+    # Prevent reusing the exact same password
+    if verify_password(data.new_password, user.get("hashed_password", "")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from your current password."
+        )
+
+    # Hash and update password
+    new_hash = get_password_hash(data.new_password)
+    update_user_field(email, {
+        "hashed_password": new_hash,
+        "password_changed_at": datetime.now(timezone.utc).isoformat()
+    })
+
+    logger.info(f"🔑 Password updated successfully for user: {email}")
+
+    # Generate new token
+    new_token = create_access_token(
+        subject=email,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+
+    return {
+        "message": "Password changed successfully.",
+        "access_token": new_token,
+        "token_type": "bearer"
     }
 
 

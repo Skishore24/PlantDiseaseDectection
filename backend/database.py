@@ -27,7 +27,7 @@ class DatabaseManager:
         self.client: Optional[MongoClient] = None
         self.db = None
         self.last_attempt_time = 0
-        self.retry_cooldown_seconds = 5
+        self.retry_cooldown_seconds = 60  # Cooldown before retrying dropped/failed connection
 
     def connect(self, force: bool = False) -> bool:
         """
@@ -55,9 +55,9 @@ class DatabaseManager:
         try:
             logger.info("Connecting to MongoDB...")
             conn_kwargs: Dict[str, Any] = {
-                "serverSelectionTimeoutMS": 5000,
-                "connectTimeoutMS": 5000,
-                "socketTimeoutMS": 10000,
+                "serverSelectionTimeoutMS": 1500,
+                "connectTimeoutMS": 1500,
+                "socketTimeoutMS": 3000,
             }
 
             if (

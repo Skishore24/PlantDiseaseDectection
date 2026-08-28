@@ -3,6 +3,7 @@ import json
 import logging
 import threading
 from typing import List, Dict, Any, Tuple, Optional
+from pathlib import Path
 import numpy as np
 from backend.config import settings
 from backend.services.disease_service import disease_service
@@ -11,7 +12,7 @@ logger = logging.getLogger("leafguard.model_service")
 
 # Singleton state
 _model = None
-_model_backend = None  # 'tensorflow', 'pytorch', or None
+_model_backend = None  # 'tensorflow', 'pytorch', or 'unloaded'
 _model_lock = threading.Lock()
 _class_names: Optional[List[str]] = None
 
@@ -65,62 +66,65 @@ class ModelService:
             if _model is not None:
                 return _model, _model_backend
 
-            # 1. Attempt TensorFlow/Keras model loading (.keras / .h5)
+            class_names = self.get_class_names()
+            num_classes = len(class_names)
+
+            # 1. Attempt TensorFlow/Keras (.keras / .h5)
             keras_path = settings.get_model_path()
             if os.path.exists(keras_path):
                 try:
                     logger.info(f"Loading TensorFlow/Keras model: {keras_path}")
-                    import tensorflow as tf
-                    model = tf.keras.models.load_model(keras_path, compile=False)
-                    # Warmup run
+                    try:
+                        import tensorflow as tf
+                        model = tf.keras.models.load_model(keras_path, compile=False)
+                    except ImportError:
+                        os.environ.setdefault("KERAS_BACKEND", "torch")
+                        import keras
+                        model = keras.models.load_model(keras_path, compile=False)
+
                     dummy = np.zeros((1, 224, 224, 3), dtype="float32")
                     model.predict(dummy, verbose=0)
                     _model = model
                     _model_backend = "tensorflow"
-                    logger.info("TensorFlow/Keras model initialized successfully.")
+                    logger.info("TensorFlow/Keras EfficientNetB0 initialized.")
                     return _model, _model_backend
                 except Exception as e:
-                    logger.warning(f"Failed to load TensorFlow model at {keras_path}: {e}")
+                    logger.warning(f"Failed to load Keras model at {keras_path}: {e}")
 
-            # 2. Attempt PyTorch fallback model loading (.pth)
-            alt_pth = os.path.join(os.path.dirname(keras_path), "final_plant_model.pth")
-            ml_pth = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ml", "output", "final_plant_model.pth")
-            
-            pth_candidates = [alt_pth, ml_pth]
+            # 2. Attempt PyTorch (.pth)
+            pth_candidates = [
+                Path(keras_path).with_suffix(".pth"),
+                Path(__file__).resolve().parent.parent / "models" / "plant_disease_model.pth"
+            ]
             for pth_path in pth_candidates:
-                if os.path.exists(pth_path):
+                if pth_path.exists():
                     try:
-                        logger.info(f"Loading PyTorch fallback model from: {pth_path}")
+                        logger.info(f"Loading PyTorch EfficientNetB0 weights: {pth_path}")
                         import torch
                         import torch.nn as nn
                         from torchvision import models
 
-                        class_names = self.get_class_names()
-                        state_dict = torch.load(pth_path, map_location=torch.device("cpu"))
-                        ckpt_classes = state_dict.get("classifier.3.weight", torch.zeros((len(class_names), 1))).shape[0]
-
-                        loaded = None
-                        for arch_fn in [models.mobilenet_v3_large, models.mobilenet_v3_small]:
-                            try:
-                                m = arch_fn(weights=None)
-                                in_features = m.classifier[3].in_features
-                                m.classifier[3] = nn.Linear(in_features, ckpt_classes)
-                                m.load_state_dict(state_dict)
-                                m.eval()
-                                loaded = m
-                                break
-                            except Exception:
-                                continue
-
-                        if loaded is not None:
-                            _model = loaded
-                            _model_backend = "pytorch"
-                            logger.info(f"PyTorch model loaded successfully with {ckpt_classes} classes.")
-                            return _model, _model_backend
+                        m = models.efficientnet_b0(weights=None)
+                        in_features = m.classifier[1].in_features
+                        m.classifier = nn.Sequential(
+                            nn.Dropout(p=0.3, inplace=False),
+                            nn.Linear(in_features, 256),
+                            nn.BatchNorm1d(256),
+                            nn.ReLU(inplace=False),
+                            nn.Dropout(p=0.2, inplace=False),
+                            nn.Linear(256, num_classes)
+                        )
+                        state = torch.load(str(pth_path), map_location=torch.device("cpu"))
+                        m.load_state_dict(state)
+                        m.eval()
+                        _model = m
+                        _model_backend = "pytorch"
+                        logger.info("PyTorch EfficientNetB0 initialized.")
+                        return _model, _model_backend
                     except Exception as e:
-                        logger.warning(f"Failed to load PyTorch model from {pth_path}: {e}")
+                        logger.warning(f"Failed to load PyTorch weights from {pth_path}: {e}")
 
-            logger.warning("No pre-trained ML model weight file found. System is ready for training.")
+            logger.info("No trained weights found. System ready for training ('python training/train_model.py').")
             _model = None
             _model_backend = "unloaded"
             return None, "unloaded"
@@ -146,7 +150,7 @@ class ModelService:
         elif backend == "pytorch" and model is not None:
             try:
                 import torch
-                # Convert (1, 224, 224, 3) to PyTorch tensor (1, 3, 224, 224) with standard normalization
+                # (1, 224, 224, 3) -> (1, 3, 224, 224) with ImageNet normalization
                 img_t = torch.from_numpy(img_batch).permute(0, 3, 1, 2).float() / 255.0
                 mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
                 std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
@@ -159,14 +163,13 @@ class ModelService:
             except Exception as e:
                 logger.error(f"PyTorch inference failed: {e}")
 
-        # If model is unavailable or inference failed, use deterministic heuristic for testing
         is_live = probabilities is not None
+
+        # If model is unavailable or inference failed, use deterministic heuristic for testing
         if probabilities is None:
-            # Generate deterministic fallback probabilities based on image byte distribution
             seed = int(np.abs(img_batch.mean() * 100000)) % 10000
             rng = np.random.RandomState(seed)
             raw_scores = rng.dirichlet(np.ones(num_classes) * 0.2)
-            # Give primary class highest weight
             top_idx = int(rng.choice(num_classes))
             raw_scores[top_idx] += 4.0
             probabilities = raw_scores / np.sum(raw_scores)
@@ -202,11 +205,11 @@ class ModelService:
         _, backend = self._load_model()
         return {
             "status": "ready" if backend in ["tensorflow", "pytorch"] else "training_required",
-            "backend": backend,
-            "architecture": "EfficientNetB0 (TensorFlow/Keras)",
+            "backend": f"EfficientNetB0 ({backend.capitalize() if backend else 'Unloaded'})",
+            "architecture": "EfficientNetB0 (Transfer Learning)",
             "num_classes": len(self.get_class_names()),
             "classes_file": os.path.exists(settings.get_class_path()),
-            "model_file": os.path.exists(settings.get_model_path()),
+            "model_file": os.path.exists(settings.get_model_path()) or os.path.exists(str(Path(settings.get_model_path()).with_suffix(".pth"))),
         }
 
 

@@ -1,7 +1,7 @@
 import os
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, status, Depends
 from pydantic import BaseModel
@@ -126,7 +126,7 @@ async def predict_leaf(
 
         # 7. Persist record to database
         record_id = uuid.uuid4().hex
-        now_iso = datetime.utcnow().isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
 
         record = {
             "id": record_id,

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Union, Optional, Dict
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status
@@ -17,7 +17,7 @@ def create_access_token(
     expires_delta: Optional[timedelta] = None
 ) -> str:
     """Create a signed JWT access token."""
-    expire = datetime.utcnow() + (
+    expire = datetime.now(timezone.utc) + (
         expires_delta
         if expires_delta
         else timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

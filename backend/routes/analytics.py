@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends
 from backend.utils.auth import get_current_user
 from backend.database import db_manager, load_local_json
@@ -155,7 +155,7 @@ async def get_analytics(current_user: dict = Depends(get_current_user)):
         })
 
     # 6. Weekly Scan Activity (Last 7 Days)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     day_counts: Dict[str, Dict[str, int]] = {}
     days_order = []
 

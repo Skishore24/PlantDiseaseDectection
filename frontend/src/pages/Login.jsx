@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Leaf, Eye, EyeOff, Scan, BarChart3, BookOpen, ArrowLeft } from "lucide-react";
+import { Leaf, Eye, EyeOff, Scan, BarChart3, BookOpen, ArrowLeft, ShieldAlert, AlertCircle, Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const FEATURES = [
@@ -27,30 +27,36 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setAuthError("");
-    if (!email || !password) { setAuthError("Please fill in all fields."); return; }
-    const result = await login(email, password);
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      setAuthError("Please fill in all fields.");
+      return;
+    }
+    const result = await login(cleanEmail, password);
     if (result.success) navigate(from, { replace: true });
   };
+
+  const isLockoutError = authError && (authError.toLowerCase().includes("locked") || authError.toLowerCase().includes("lockout"));
 
   return (
     <div className="min-h-screen bg-bg flex">
 
       {/* ── Left panel ──────────────────────────────── */}
-      <div className="hidden lg:flex lg:w-[42%] bg-brand flex-col justify-between p-12">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-            <Leaf className="w-4 h-4 text-white" strokeWidth={2.5} />
+      <div className="hidden lg:flex lg:w-[42%] bg-brand flex-col justify-between p-12 relative overflow-hidden">
+        <div className="flex items-center gap-2.5 relative z-10">
+          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+            <Leaf className="w-5 h-5 text-white" strokeWidth={2.5} />
           </div>
-          <span className="text-lg font-bold text-white tracking-tight">PlantAI</span>
+          <span className="text-xl font-bold text-white tracking-tight">LeafGuard AI</span>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-8 relative z-10">
           <div>
-            <h1 className="text-4xl font-bold text-white leading-tight tracking-tight">
+            <h1 className="text-4xl font-extrabold text-white leading-tight tracking-tight">
               Diagnose crop diseases<br />with AI precision.
             </h1>
             <p className="text-green-100 mt-3 text-base leading-relaxed">
-              Enterprise-grade plant pathology powered by deep neural networks trained on the PlantVillage dataset.
+              Enterprise-grade plant pathology powered by deep neural networks trained on 54,000+ expert-annotated leaf samples.
             </p>
           </div>
           <div className="space-y-4">
@@ -68,8 +74,8 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="text-xs text-green-100/60">
-          © {new Date().getFullYear()} PlantAI. All rights reserved.
+        <p className="text-xs text-green-100/60 relative z-10">
+          © {new Date().getFullYear()} LeafGuard AI Platform. Secure Authentication.
         </p>
       </div>
 
@@ -88,20 +94,36 @@ export default function Login() {
             <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center">
               <Leaf className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
-            <span className="text-lg font-bold text-ink">PlantAI</span>
+            <span className="text-lg font-bold text-ink">LeafGuard AI</span>
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-ink">Welcome back</h2>
-            <p className="text-sm text-ink-muted mt-1">Sign in to your account to continue</p>
+            <h2 className="text-2xl font-bold text-ink tracking-tight">Welcome back</h2>
+            <p className="text-sm text-ink-muted mt-1">Sign in with your credentials to access your dashboard</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
 
-            {/* Error message */}
+            {/* Error message / Lockout banner */}
             {authError && (
-              <div className="px-4 py-3 rounded-lg bg-danger-bg border border-danger-border">
-                <p className="text-sm text-danger-text">{authError}</p>
+              <div className={`p-4 rounded-xl border flex items-start gap-3 animate-fade-in ${
+                isLockoutError
+                  ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400"
+                  : "bg-danger-bg border-danger-border text-danger-text"
+              }`}>
+                {isLockoutError ? (
+                  <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <p className="text-xs font-semibold leading-relaxed">
+                    {isLockoutError ? "Security Lockout Active" : "Authentication Notice"}
+                  </p>
+                  <p className="text-xs mt-0.5 leading-relaxed opacity-95">
+                    {authError}
+                  </p>
+                </div>
               </div>
             )}
 
@@ -135,7 +157,8 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-disabled hover:text-ink transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-disabled hover:text-ink transition-colors p-1"
+                  tabIndex={-1}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -145,24 +168,28 @@ export default function Login() {
             <button
               type="submit"
               disabled={isLoading}
-              className="btn btn-primary btn-lg w-full justify-center mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="btn btn-primary btn-lg w-full justify-center mt-1 disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
             >
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  Signing in…
+                  Verifying credentials…
                 </span>
-              ) : "Sign In"}
+              ) : (
+                "Sign In"
+              )}
             </button>
 
           </form>
 
-          <p className="text-center text-sm text-ink-muted mt-6">
-            Don't have an account?{" "}
-            <Link to="/register" className="text-brand font-semibold hover:underline">
-              Create one free
-            </Link>
-          </p>
+          <div className="mt-6 pt-6 border-t border-border/50 text-center">
+            <p className="text-sm text-ink-muted">
+              Don't have an account?{" "}
+              <Link to="/register" className="text-brand font-semibold hover:underline">
+                Create one free
+              </Link>
+            </p>
+          </div>
 
         </div>
       </div>

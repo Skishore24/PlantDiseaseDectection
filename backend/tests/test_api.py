@@ -3,6 +3,7 @@ import pytest
 from PIL import Image
 from fastapi.testclient import TestClient
 from backend.app import app
+from backend.utils.security import validate_password_strength, verify_dummy_password
 
 client = TestClient(app)
 
@@ -38,11 +39,63 @@ def test_root_status():
 
 
 # ─────────────────────────────────────────────────────────────
-# 2. Authentication Flow Tests
+# 2. Authentication & Login Security Tests
 # ─────────────────────────────────────────────────────────────
+def test_password_strength_validator():
+    """Verify strict password complexity rules."""
+    # Valid strong password
+    valid, msg = validate_password_strength("PlantPathology2026!#")
+    assert valid is True
+
+    # Too short
+    valid, msg = validate_password_strength("Short1!")
+    assert valid is False
+    assert "at least 8 characters" in msg
+
+    # Missing uppercase
+    valid, msg = validate_password_strength("lowercase123!@#")
+    assert valid is False
+    assert "uppercase" in msg
+
+    # Missing lowercase
+    valid, msg = validate_password_strength("UPPERCASE123!@#")
+    assert valid is False
+    assert "lowercase" in msg
+
+    # Missing number
+    valid, msg = validate_password_strength("NoNumbersHere!@#")
+    assert valid is False
+    assert "number" in msg
+
+    # Missing special char
+    valid, msg = validate_password_strength("NoSpecialChar123")
+    assert valid is False
+    assert "special character" in msg
+
+    # Common weak password
+    valid, msg = validate_password_strength("password123")
+    assert valid is False
+    assert "too common" in msg
+
+
+def test_register_weak_password_rejected():
+    """Ensure weak passwords are rejected during registration."""
+    res = client.post(
+        "/api/v1/auth/register",
+        json={
+            "name": "Weak User",
+            "email": "weak_pw_user@example.com",
+            "password": "weakpassword",
+            "role": "Agronomist",
+        }
+    )
+    assert res.status_code == 400
+    assert "Password" in res.json()["detail"]
+
+
 @pytest.fixture(scope="module")
 def auth_token():
-    """Register/Login a test user and return the JWT bearer token."""
+    """Register/Login a test user with a strong password and return the JWT bearer token."""
     email = "tester_agronomist@leafguard.ai"
     password = "StrongPassword123!"
 
@@ -86,11 +139,93 @@ def test_auth_unauthorized_access():
     assert response.status_code == 401
 
 
+def test_account_lockout_after_consecutive_failures():
+    """Verify that 5 consecutive failed logins triggers an account lockout (HTTP 429)."""
+    target_email = "lockout_target@leafguard.ai"
+    correct_password = "LockoutTargetPassword2026!"
+
+    # Register target account
+    client.post(
+        "/api/v1/auth/register",
+        json={
+            "name": "Lockout Target",
+            "email": target_email,
+            "password": correct_password,
+            "role": "Researcher",
+        }
+    )
+
+    # Perform 4 failed attempts
+    for _ in range(4):
+        res = client.post(
+            "/api/v1/auth/login",
+            json={"email": target_email, "password": "WrongPassword999!"}
+        )
+        assert res.status_code == 401
+        assert "remaining before" in res.json()["detail"]
+
+    # 5th failed attempt triggers lockout
+    lockout_res = client.post(
+        "/api/v1/auth/login",
+        json={"email": target_email, "password": "WrongPassword999!"}
+    )
+    assert lockout_res.status_code == 429
+    assert "locked" in lockout_res.json()["detail"].lower()
+
+
+def test_change_password_endpoint(auth_token):
+    """Test authenticated password change endpoint."""
+    headers = {"Authorization": f"Bearer {auth_token}"}
+
+    # Incorrect current password
+    bad_old = client.post(
+        "/api/v1/auth/change-password",
+        headers=headers,
+        json={
+            "current_password": "IncorrectOldPassword123!",
+            "new_password": "NewStrongPassword2026!#"
+        }
+    )
+    assert bad_old.status_code == 400
+    assert "Incorrect current password" in bad_old.json()["detail"]
+
+    # Valid change
+    good_change = client.post(
+        "/api/v1/auth/change-password",
+        headers=headers,
+        json={
+            "current_password": "StrongPassword123!",
+            "new_password": "BrandNewSecret2026!#"
+        }
+    )
+    assert good_change.status_code == 200
+    assert "successfully" in good_change.json()["message"]
+
+    # Verify login with new password
+    login_new = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "tester_agronomist@leafguard.ai",
+            "password": "BrandNewSecret2026!#"
+        }
+    )
+    assert login_new.status_code == 200
+
+
 # ─────────────────────────────────────────────────────────────
 # 3. Leaf Prediction & Image Validation Tests
 # ─────────────────────────────────────────────────────────────
 def test_predict_valid_image(auth_token):
-    headers = {"Authorization": f"Bearer {auth_token}"}
+    # Use login to get active token in case password was changed in previous test
+    login_res = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "tester_agronomist@leafguard.ai",
+            "password": "BrandNewSecret2026!#"
+        }
+    )
+    active_token = login_res.json().get("access_token", auth_token)
+    headers = {"Authorization": f"Bearer {active_token}"}
     img_bytes = create_test_image_bytes(format="JPEG")
 
     files = {
@@ -143,7 +278,15 @@ def test_predict_corrupted_image(auth_token):
 # 4. History & Telemetry Tests
 # ─────────────────────────────────────────────────────────────
 def test_history_lifecycle(auth_token):
-    headers = {"Authorization": f"Bearer {auth_token}"}
+    login_res = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "tester_agronomist@leafguard.ai",
+            "password": "BrandNewSecret2026!#"
+        }
+    )
+    active_token = login_res.json().get("access_token", auth_token)
+    headers = {"Authorization": f"Bearer {active_token}"}
 
     # Fetch history
     res = client.get("/api/v1/history", headers=headers)
@@ -168,7 +311,15 @@ def test_history_lifecycle(auth_token):
 
 
 def test_analytics_endpoints(auth_token):
-    headers = {"Authorization": f"Bearer {auth_token}"}
+    login_res = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "tester_agronomist@leafguard.ai",
+            "password": "BrandNewSecret2026!#"
+        }
+    )
+    active_token = login_res.json().get("access_token", auth_token)
+    headers = {"Authorization": f"Bearer {active_token}"}
 
     # Stats
     stats_res = client.get("/api/v1/stats", headers=headers)

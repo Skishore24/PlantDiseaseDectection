@@ -45,7 +45,7 @@ Plant-Disease-Analysis/
 │   ├── services/
 │   │   ├── disease_service.py     # Pathology metadata & class parsing
 │   │   ├── image_service.py       # Pillow validation & temp file lifecycle
-│   │   └── model_service.py       # Keras / PyTorch inference execution
+│   │   └── model_service.py       # TensorFlow / Keras EfficientNetB0 inference engine
 │   ├── utils/
 │   │   ├── auth.py                # JWT creation, decode & user dependency
 │   │   ├── logging_config.py      # Safe rotating file & stream logger
@@ -97,16 +97,18 @@ cd PlantDiseaseDectection
 # 2. Create virtual environment
 python -m venv venv
 venv\Scripts\activate
-mac: source venv/bin/activate  
+# macOS/Linux: source venv/bin/activate
 
 # 3. Install dependencies
 pip install -r requirements.txt
 
 # 4. Copy environment configuration
-cp backend/.env.example backend/.env
+cp .env.example .env
 
-# 5. Start the backend API server
-uvicorn app:app --reload
+# 5. Start the backend API server (from root or backend directory)
+python backend/main.py
+# Or if inside backend directory:
+# uvicorn app:app --reload
 ```
 > The API server will start on `http://127.0.0.1:8000` with interactive Swagger docs at `http://127.0.0.1:8000/api/v1/docs`.
 

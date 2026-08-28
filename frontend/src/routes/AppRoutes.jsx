@@ -5,7 +5,7 @@ import { Routes, Route } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 
 // Route guard
-import ProtectedRoute from "../components/routes/ProtectedRoute";
+import ProtectedRoute from "../components/ProtectedRoute";
 
 // Public pages
 import Landing  from "../pages/Landing";
