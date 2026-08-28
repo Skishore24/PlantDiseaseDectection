@@ -79,10 +79,10 @@ export default function Sidebar({ isOpen, onClose }) {
             </div>
             <div>
               <div className="text-sm font-bold text-ink tracking-tight leading-none">
-                Plant<span className="text-brand">AI</span>
+                LeafGuard <span className="text-brand">AI</span>
               </div>
               <div className="text-2xs text-ink-muted mt-0.5 font-medium">
-                Pathomics Pro
+                Crop Health Intelligence
               </div>
             </div>
           </Link>

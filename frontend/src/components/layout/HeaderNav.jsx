@@ -33,7 +33,7 @@ export default function HeaderNav({ onOpenSidebar }) {
   const [notifications, setNotifications] = useState([]);
   const notifRef = useRef(null);
 
-  const title = TITLES[location.pathname] ?? "Plant AI";
+  const title = TITLES[location.pathname] ?? "LeafGuard AI";
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const loadRealNotifications = async () => {

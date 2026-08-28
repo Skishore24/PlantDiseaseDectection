@@ -2,20 +2,18 @@ import os
 import sys
 from pathlib import Path
 
-# Resolve paths: __file__ is inside api/ directory
+# Resolve paths
 API_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = API_DIR.parent
 BACKEND_DIR = PROJECT_ROOT / "backend"
 
-for path in [str(BACKEND_DIR), str(PROJECT_ROOT), str(API_DIR)]:
+for path in [str(PROJECT_ROOT), str(BACKEND_DIR), str(API_DIR)]:
     if path not in sys.path:
         sys.path.insert(0, path)
 
 try:
-    from backend.app.main import app
+    from backend.app import app
 except ImportError:
-    from app.main import app  # type: ignore # pyrefly: ignore [missing-import]
+    from app import app  # type: ignore
 
-# Expose app for Vercel Serverless Function engine
 app = app
-

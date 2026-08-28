@@ -1,250 +1,199 @@
-# 🌿 PlantAI — Plant Disease Detection Platform
+# 🌿 LeafGuard AI — AI-Powered Plant Leaf Disease Detection Platform
 
-> **Enterprise AI platform for early detection of crop diseases.**  
-> Upload a leaf image → get instant pathology diagnosis, treatment protocols, and PDF reports.
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React Vite](https://img.shields.io/badge/Frontend-React_18_%2B_Vite-61DAFB.svg?logo=react&logoColor=black)](https://vitejs.dev)
+[![TensorFlow](https://img.shields.io/badge/Vision_Model-EfficientNetB0-FF6F00.svg?logo=tensorflow&logoColor=white)](https://www.tensorflow.org)
+[![MongoDB](https://img.shields.io/badge/Database-MongoDB_Atlas-47A248.svg?logo=mongodb&logoColor=white)](https://www.mongodb.com)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
----
-
-## 🚀 Live Demo
-
-| Resource | URL |
-|---|---|
-| Frontend (dev) | `http://localhost:5173` |
-| Backend API | `http://localhost:8000` |
-| API Docs (Swagger) | `http://localhost:8000/api/v1/docs` |
+> **LeafGuard AI** is a full-stack, production-quality agronomic web application that detects plant leaf diseases across **38 disease classes and 14 agricultural crop species** using deep neural transfer learning (EfficientNetB0) and provides structured agronomic advice, biological controls, and cultural prevention protocols.
 
 ---
 
-## 🏗️ Tech Stack
+## 📌 Features
 
-| Layer | Technology |
-|---|---|
-| **Frontend** | React 18, Vite, TailwindCSS, Recharts, Framer Motion |
-| **Backend** | FastAPI, Python 3.11+, Uvicorn |
-| **AI / ML** | TensorFlow (Keras) · PyTorch fallback · PlantVillage dataset |
-| **Database** | MongoDB Atlas (pymongo) |
-| **Auth** | JWT Bearer tokens (python-jose + bcrypt) |
-| **Deployment** | Vercel (frontend) · Render / Railway (backend) |
+- 🌿 **38-Class Deep Vision Classification**: Identifies plant diseases across Apples, Blueberries, Cherries, Corn, Grapes, Oranges, Peaches, Bell Peppers, Potatoes, Raspberries, Soybeans, Squash, Strawberries, and Tomatoes.
+- ⚡ **Sub-Second Real-Time Inference**: Powered by Transfer Learning with EfficientNetB0, convolutional feature pooling, and top-3 probability distribution extraction.
+- 🛡️ **Actionable Treatment & Prevention**: Provides structured symptoms, causes, bio-fungicides/treatments, and long-term cultural prevention guidelines.
+- 📊 **Real Database Analytics & Telemetry**: Farm-level disease frequency, health-to-infection ratio, most scanned crops, and 7-day diagnosis charts without mock data placeholders.
+- 🗄️ **Persistent Cloud History & Export**: Complete scan history synced with MongoDB Atlas (and offline local storage fallback) with 1-click PDF Diagnostic Certificate generation.
+- 🔒 **Enterprise-Grade Security**: JWT authentication with bcrypt password hashing, non-wildcard configurable CORS, in-memory/Redis rate limiting, and strict Pillow binary image verification.
 
 ---
 
-## 📁 Project Structure
+## 🏗️ System Architecture
 
 ```
 Plant-Disease-Analysis/
 ├── backend/
-│   ├── app/
-│   │   ├── api/              # Route handlers (auth, predict, history, stats, health)
-│   │   ├── core/             # Config, security, logging, agronomy advisory
-│   │   ├── db/               # MongoDB connection singleton
-│   │   ├── schemas/          # Pydantic request/response models
-│   │   └── services/         # Business logic (prediction, user management)
-│   ├── .env                  # 🔒 NOT committed — copy from .env.example
-│   ├── .env.example          # ✅ Safe template — shows required variables
-│   └── requirements.txt
-│
+│   ├── app.py                     # FastAPI application & route aggregation
+│   ├── config.py                  # Pydantic BaseSettings & environment manager
+│   ├── database.py                # MongoDB Atlas manager & local JSON fallback
+│   ├── main.py                    # Local uvicorn development launcher
+│   ├── data/
+│   │   └── disease_info.json      # Structured 38-class agronomic knowledge base
+│   ├── models/
+│   │   ├── class_names.json       # Dynamic 38-class category mapping
+│   │   ├── model_metrics.json     # Model evaluation benchmarks
+│   │   └── plant_disease_model.keras # Trained EfficientNetB0 neural weights
+│   ├── routes/
+│   │   ├── analytics.py           # Real database telemetry & stats
+│   │   ├── auth.py                # User registration, login, and profile lookup
+│   │   ├── health.py              # Health check & diagnostics
+│   │   ├── history.py             # Scan history CRUD & batch deletion
+│   │   └── prediction.py          # Leaf disease classification endpoint
+│   ├── services/
+│   │   ├── disease_service.py     # Pathology metadata & class parsing
+│   │   ├── image_service.py       # Pillow validation & temp file lifecycle
+│   │   └── model_service.py       # Keras / PyTorch inference execution
+│   ├── utils/
+│   │   ├── auth.py                # JWT creation, decode & user dependency
+│   │   ├── logging_config.py      # Safe rotating file & stream logger
+│   │   ├── rate_limiter.py        # Sliding window rate limiter
+│   │   └── security.py            # Bcrypt hashing & verification
+│   └── tests/
+│       └── test_api.py            # Pytest automated test suite
+├── training/
+│   ├── train_model.py             # EfficientNetB0 transfer learning training pipeline
+│   └── evaluate_model.py          # Model evaluation, F1, and confusion matrix
+├── dataset/
+│   └── README.md                  # Kaggle dataset setup & folder guide
 ├── frontend/
 │   ├── src/
-│   │   ├── components/
-│   │   │   ├── layout/       # Sidebar, HeaderNav, AppLayout, Footer
-│   │   │   └── routes/       # ProtectedRoute (auth guard)
-│   │   ├── context/          # AuthContext (real JWT login/register)
-│   │   ├── data/             # Mock data for UI charts and knowledge base
 │   │   ├── pages/
-│   │   │   ├── Landing.jsx   # Public marketing page (no login required)
-│   │   │   ├── Login.jsx     # Auth — connects to backend JWT
-│   │   │   ├── Register.jsx  # Auth — connects to backend signup
-│   │   │   ├── Dashboard.jsx # Stats, charts, quick actions
-│   │   │   ├── Predict.jsx   # AI diagnosis upload page
-│   │   │   ├── History.jsx   # Scan history from backend
-│   │   │   ├── Knowledge.jsx # Disease library with search/filter
-│   │   │   ├── Analytics.jsx # Charts and telemetry
-│   │   │   ├── FAQ.jsx       # Help accordion
-│   │   │   └── Settings.jsx  # Profile & preferences
-│   │   ├── routes/           # AppRoutes (protected + public split)
-│   │   └── utils/            # api.js — JWT-authenticated API calls
-│   ├── tailwind.config.js    # Design token system
-│   ├── vite.config.js        # Dev proxy to backend
+│   │   │   ├── Landing.jsx        # Marketing page (Hero, Features, How it works, FAQ)
+│   │   │   ├── Dashboard.jsx      # Leaf upload & analysis hub
+│   │   │   ├── Predict.jsx        # Dedicated diagnosis suite
+│   │   │   ├── History.jsx        # History search, filters, & batch delete
+│   │   │   └── Analytics.jsx      # Telemetry charts & crop distribution
+│   │   ├── components/            # Layout, camera modal, toasts, UI components
+│   │   ├── utils/
+│   │   │   ├── api.js             # Authenticated client fetch library
+│   │   │   └── pdfExport.js       # jsPDF report certificate generator
+│   │   └── context/
+│   │       └── AuthContext.jsx    # Auth state & token manager
 │   └── package.json
-│
-├── ml/
-│   ├── output/
-│   │   ├── final_plant_model.keras   # 🔒 NOT committed (too large)
-│   │   └── classes.json              # Disease class names (committed)
-│   └── training/                     # Training scripts
-│
-├── .gitignore                # Blocks secrets, models, and large files
-└── README.md
+└── .env.example                   # Environment configuration template
 ```
 
 ---
 
-## ⚙️ Local Setup
+## 🚀 Quickstart Guide
 
-### Prerequisites
-- **Python 3.11+**
-- **Node.js 18+**
-- **MongoDB Atlas** (free tier works)
-
----
-
-### 1 — Clone the Repository
-
-```bash
-git clone https://github.com/your-username/Plant-Disease-Analysis.git
-cd Plant-Disease-Analysis
-```
+### 1. Prerequisites
+- **Python 3.10+** (Tested on Python 3.10, 3.11, 3.12, 3.14)
+- **Node.js 18+** & **npm**
+- **MongoDB Atlas** (Optional; automatically uses local storage if unconfigured)
 
 ---
 
-### 2 — Backend Setup
+### 2. Backend Setup
 
 ```bash
-cd backend
+# 1. Clone the repository
+git clone https://github.com/Skishore24/PlantDiseaseDectection.git
+cd PlantDiseaseDectection
 
-# Create and activate virtual environment
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
+# 2. Create virtual environment
+python -m venv venv
+venv\Scripts\activate
+mac: source venv/bin/activate  
 
-# Install dependencies
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# Set up environment variables
-cp .env.example .env
-# Edit .env and fill in your SECRET_KEY and MONGO_URI
-```
+# 4. Copy environment configuration
+cp backend/.env.example backend/.env
 
-**Generate a secure SECRET_KEY:**
-```bash
-python -c "import secrets; print(secrets.token_hex(64))"
+# 5. Start the backend API server
+uvicorn app:app --reload
 ```
-
-**Start the backend:**
-```bash
-# From the project root (Plant-Disease-Analysis/)
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Or from inside the `backend/` folder:
-```bash
-uvicorn app.main:app --reload --port 8000
-```
+> The API server will start on `http://127.0.0.1:8000` with interactive Swagger docs at `http://127.0.0.1:8000/api/v1/docs`.
 
 ---
 
-### 3 — Frontend Setup
+### 3. Frontend Setup
 
 ```bash
+# Navigate to the frontend directory
 cd frontend
 
 # Install dependencies
 npm install
 
-# Start dev server (proxies /api to localhost:8000)
+# Start Vite development server
 npm run dev
 ```
-
-Open `http://localhost:5173` in your browser.
+> The web application will launch on `http://localhost:5173`.
 
 ---
 
-### 4 — ML Model
+## 🧠 ML Model Training & Evaluation
 
-The trained model file (`final_plant_model.keras`) is **not committed** to the repo (binary, ~3–100MB).
+### 1. Download Dataset
+Download the **New Plant Diseases Dataset (Augmented)** from Kaggle:
+🔗 [https://www.kaggle.com/datasets/vipoooool/new-plant-diseases-dataset](https://www.kaggle.com/datasets/vipoooool/new-plant-diseases-dataset)
 
-**Option A — Use your existing model:**
-Ensure `ml/output/final_plant_model.keras` and `ml/output/classes.json` exist.
-The backend will auto-detect and load it.
+Extract into the `dataset/` directory:
+```
+dataset/
+├── train/
+└── valid/
+```
 
-**Option B — Run in Demo mode:**
-If no model file is found, the backend runs a plausible demo inference automatically.
-
-**Option C — Re-train:**
+### 2. Run Training
 ```bash
-cd ml/training
-python train.py
+# Train EfficientNetB0 on the 38 classes
+python training/train_model.py --epochs 12 --batch-size 32 --lr 0.001 --fine-tune
+```
+The script will save:
+- `backend/models/plant_disease_model.keras`
+- `backend/models/class_names.json`
+- `backend/models/training_history.json`
+
+### 3. Evaluate Model
+```bash
+python training/evaluate_model.py
+```
+This generates precision, recall, F1-scores, and exports `backend/models/model_metrics.json`.
+
+---
+
+## 📡 API Reference
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :---: |
+| `GET` | `/health` | Server, database, and ML model diagnostic status | No |
+| `POST` | `/api/v1/auth/register` | Register a new user account | No |
+| `POST` | `/api/v1/auth/login` | Authenticate user and receive JWT bearer token | No |
+| `GET` | `/api/v1/auth/me` | Retrieve authenticated user profile | Yes |
+| `POST` | `/api/v1/predict` | Upload leaf image for neural disease classification | Yes |
+| `GET` | `/api/v1/history` | Retrieve user scan history with optional filters | Yes |
+| `GET` | `/api/v1/history/{id}` | Retrieve details of a single scan record | Yes |
+| `DELETE`| `/api/v1/history/{id}` | Delete a scan record | Yes |
+| `POST` | `/api/v1/history/delete`| Batch delete multiple scan records | Yes |
+| `DELETE`| `/api/v1/history` | Clear all history records | Yes |
+| `GET` | `/api/v1/stats` | Platform summary counts & top detected pathogen | Yes |
+| `GET` | `/api/v1/analytics` | Aggregated disease distribution & weekly telemetry | Yes |
+
+---
+
+## 🧪 Testing
+
+Run the automated test suite with pytest:
+
+```bash
+python -m pytest backend/tests/test_api.py -v
 ```
 
 ---
 
-## 🔐 Environment Variables
+## ⚠️ Agricultural & AI Disclaimer
 
-Copy `backend/.env.example` → `backend/.env` and fill in:
-
-| Variable | Description | Required |
-|---|---|---|
-| `SECRET_KEY` | JWT signing key (min 64 hex chars) | ✅ |
-| `MONGO_URI` | MongoDB Atlas connection string | ✅ |
-| `DATABASE_NAME` | MongoDB database name | ✅ |
-| `MODEL_PATH` | Path to `.keras` model (from project root) | ✅ |
-| `CLASS_PATH` | Path to `classes.json` | ✅ |
-| `DEBUG` | `True` for dev, `False` for production | ✅ |
-| `BACKEND_CORS_ORIGINS` | Comma-separated allowed origins | Optional |
-
----
-
-## 🛡️ Security Notes
-
-- **Never commit `.env`** — it's in `.gitignore`
-- **Never commit model files** — they're in `.gitignore`
-- Use a **randomly generated SECRET_KEY** (64+ hex chars)
-- In production, set `BACKEND_CORS_ORIGINS` to your exact domain
-- Set `DEBUG=False` in production
-- All app routes require valid JWT — public landing page is the only unauthenticated page
-
----
-
-## 🌐 Deployment
-
-### Frontend (Vercel)
-1. Push `frontend/` to GitHub
-2. Import into Vercel
-3. Set build command: `npm run build`
-4. Set output directory: `dist`
-5. Set `VITE_API_BASE` env var to your backend URL
-
-### Backend (Render / Railway)
-1. Set `Start Command` to: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-2. Add all `.env` variables in the platform's environment settings
-3. Upload the model file via Render's disk or use object storage (S3/R2)
-
----
-
-## 📊 API Endpoints
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| `POST` | `/api/v1/auth/signup` | ❌ | Register new user |
-| `POST` | `/api/v1/auth/login` | ❌ | Login → returns JWT + user |
-| `GET`  | `/api/v1/auth/me`    | ✅ | Get current user profile |
-| `POST` | `/api/v1/predict`    | ✅ | Run AI leaf diagnosis |
-| `GET`  | `/api/v1/history`    | ✅ | Fetch scan history |
-| `GET`  | `/api/v1/stats`      | ✅ | Platform statistics |
-| `GET`  | `/api/v1/health`     | ❌ | Health check + model status |
-
-Interactive API docs: `http://localhost:8000/api/v1/docs`
-
----
-
-## 🎯 Supported Diseases (15 classes)
-
-| Crop | Disease |
-|---|---|
-| **Tomato** | Bacterial Spot, Early Blight, Late Blight, Leaf Mold, Septoria Leaf Spot, Spider Mites, Target Spot, YellowLeaf Curl Virus, Mosaic Virus, Healthy |
-| **Potato** | Early Blight, Late Blight, Healthy |
-| **Pepper** | Bacterial Spot, Healthy |
+> **Disclaimer**: Predictions and recommendations provided by **LeafGuard AI** are generated by artificial intelligence models and may occasionally produce errors. Results are intended solely as supportive guidance and should be verified by certified agronomists or local agricultural extension services before applying commercial chemical pesticides or making critical farming investments.
 
 ---
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-## 👤 Author
-
-Built with ❤️ by [Skishore24](https://github.com/Skishore24)
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

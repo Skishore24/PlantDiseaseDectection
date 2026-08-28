@@ -1,31 +1,28 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, LineChart, Line, CartesianGrid
 } from "recharts";
 import {
-  Activity, TrendingUp, Scan, ShieldCheck, BarChart3, RefreshCw
+  BarChart3, TrendingUp, AlertTriangle, CheckCircle,
+  Leaf, Scan, RefreshCw, Calendar, ArrowUpRight
 } from "lucide-react";
-import { fetchAnalyticsData, fetchHistory } from "../utils/api";
+import { fetchAnalyticsData } from "../utils/api";
 
-const COLORS = ["#DC2626", "#D97706", "#16A34A", "#7C3AED", "#2563EB"];
+const PALETTE = ["#16A34A", "#DC2626", "#D97706", "#2563EB", "#7C3AED", "#0891B2"];
 
 export default function Analytics() {
-  const [telemetry, setTelemetry] = useState(null);
-  const [history, setHistory]     = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await fetchAnalyticsData();
-      if (data) {
-        setTelemetry(data);
-      }
-      const historyList = await fetchHistory(50);
-      setHistory(historyList);
-    } catch (e) {
-      console.error(e);
+      const analytics = await fetchAnalyticsData();
+      setData(analytics);
+    } catch {
+      // Fallback
     } finally {
       setLoading(false);
     }
@@ -35,182 +32,204 @@ export default function Analytics() {
     loadData();
   }, []);
 
-  const totalScans = telemetry?.totalScans ?? history.length;
-  const avgConfidence = telemetry?.avgConfidence ?? (history.length ? Math.round(history.reduce((a, b) => a + (b.confidence || 0), 0) / history.length) : 0);
-  const healthyCount = telemetry?.healthyScans ?? history.filter(x => (x.disease || "").toLowerCase().includes("healthy")).length;
-  const diseasedCount = telemetry?.diseasedScans ?? (totalScans - healthyCount);
-  const topDisease = telemetry?.topDisease ?? (history.length ? (history[0].disease || "").replace(/__/g, " ").replace(/_/g, " ") : "None");
-
-  // Build disease distribution from real history
-  const distMap = {};
-  history.forEach(item => {
-    const name = (item.disease || "Unknown").replace(/__/g, " ").replace(/_/g, " ");
-    distMap[name] = (distMap[name] || 0) + 1;
-  });
-
-  const diseaseDistribution = Object.keys(distMap).length > 0
-    ? Object.entries(distMap).map(([name, count], idx) => ({
-        name,
-        count,
-        color: COLORS[idx % COLORS.length]
-      }))
-    : (telemetry?.diseaseDistribution || [
-        { name: "Healthy Foliage", count: healthyCount, color: "#16A34A" },
-        { name: "Foliage Infection", count: diseasedCount, color: "#DC2626" }
-      ]);
-
-  // Crop health breakdown calculated from actual scans
-  const crops = ["Potato", "Tomato", "Pepper"];
-  const cropHealthRadar = crops.map(c => {
-    const cScans = history.filter(x => (x.disease || "").toLowerCase().includes(c.toLowerCase()));
-    const cTotal = cScans.length;
-    const cHealthy = cScans.filter(x => (x.disease || "").toLowerCase().includes("healthy")).length;
-    const health = cTotal > 0 ? Math.round((cHealthy / cTotal) * 100) : 100;
-    return { crop: c, health, scans: cTotal };
-  });
+  const totalScans = data?.totalScans || 0;
+  const healthyScans = data?.healthyScans || 0;
+  const diseasedScans = data?.diseasedScans || 0;
+  const healthyRatio = data?.healthyRatio || 0;
+  const mostScannedPlant = data?.mostScannedPlant || "None";
+  const mostDetectedDisease = data?.mostDetectedDisease || "None";
+  const weeklyActivity = data?.weeklyActivity || [];
+  const diseaseDist = data?.diseaseDistribution || [];
+  const plantDist = data?.plantDistribution || [];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-ink">Analytics &amp; Diagnostic Telemetry</h2>
+          <h2 className="text-xl font-bold text-ink">Agronomic Analytics &amp; Health Insights</h2>
           <p className="text-sm text-ink-muted mt-0.5">
-            Real-time diagnostic metrics and system performance
+            Real-time telemetry and pathogen incidence aggregated from your database records.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={loadData}
-            className="btn btn-secondary btn-sm gap-1.5"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-light border border-brand-border">
-            <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
-            <span className="text-xs font-semibold text-success-text font-mono">Live System</span>
-          </div>
-        </div>
+        <button
+          onClick={loadData}
+          className="btn btn-secondary btn-sm gap-1.5 self-start sm:self-auto"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          Refresh Data
+        </button>
       </div>
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Total Saved Scans", value: totalScans.toString(), icon: Scan,       color: "text-brand", bg: "bg-brand-light", delta: "Database History" },
-          { label: "Avg Confidence",    value: avgConfidence > 0 ? `${avgConfidence}%` : "--", icon: ShieldCheck, color: "text-info",  bg: "bg-info-bg",    delta: "Local Model Match" },
-          { label: "Healthy Foliage",   value: healthyCount.toString(), icon: Activity,   color: "text-success", bg: "bg-success-bg", delta: `${totalScans ? Math.round((healthyCount/totalScans)*100) : 0}% of scans` },
-          { label: "Diseased Foliage",  value: diseasedCount.toString(), icon: BarChart3,  color: "text-danger",  bg: "bg-danger-bg",  delta: `${totalScans ? Math.round((diseasedCount/totalScans)*100) : 0}% flagged` },
-        ].map((m) => (
-          <div key={m.label} className="card p-5">
-            <div className={`w-9 h-9 rounded-lg ${m.bg} flex items-center justify-center mb-3`}>
-              <m.icon className={`w-4.5 h-4.5 ${m.color}`} strokeWidth={2} />
-            </div>
-            <div className="text-2xl font-bold text-ink">{m.value}</div>
-            <div className="text-xs text-ink-muted mt-0.5">{m.label}</div>
-            <div className="text-2xs text-brand font-mono font-semibold mt-1">{m.delta}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Charts grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* Pathogen pie chart */}
-        <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ink mb-1">Pathogen &amp; Condition Distribution</h3>
-          <p className="text-xs text-ink-muted mb-5">Breakdown based on your actual diagnostic scans</p>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={diseaseDistribution}
-                  dataKey="count"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  innerRadius={40}
-                >
-                  {diseaseDistribution.map((entry, idx) => (
-                    <Cell key={idx} fill={entry.color || COLORS[idx % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: "#FFF", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "12px" }} />
-                <Legend wrapperStyle={{ fontSize: "11px" }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+      {loading ? (
+        <div className="card p-20 text-center flex flex-col items-center justify-center">
+          <RefreshCw className="w-8 h-8 text-brand animate-spin mb-3" />
+          <p className="text-sm font-semibold text-ink">Aggregating telemetry data…</p>
         </div>
+      ) : totalScans === 0 ? (
+        /* Empty State */
+        <div className="card p-16 text-center">
+          <BarChart3 className="w-12 h-12 text-ink-disabled mx-auto mb-3" />
+          <h3 className="text-base font-bold text-ink mb-1">No Diagnostic Data Yet</h3>
+          <p className="text-xs text-ink-muted max-w-sm mx-auto mb-5 leading-relaxed">
+            There are currently no leaf scans recorded in your database. Once you perform plant leaf diagnoses, real-time disease distribution and health charts will appear here.
+          </p>
+          <Link to="/predict" className="btn btn-primary btn-sm gap-1.5">
+            <Scan className="w-3.5 h-3.5" />
+            Analyze First Leaf
+          </Link>
+        </div>
+      ) : (
+        /* Analytics Content */
+        <div className="space-y-6">
 
-        {/* Crop health overview */}
-        <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ink mb-1">Crop Foliage Health Overview</h3>
-          <p className="text-xs text-ink-muted mb-5">Proportion of healthy foliage by crop species</p>
-          <div className="space-y-4 pt-2">
-            {cropHealthRadar.map((crop) => (
-              <div key={crop.crop} className="p-3.5 rounded-lg border border-border bg-bg-subtle">
-                <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-                  <span className="text-ink">{crop.crop} Crop Foliage</span>
-                  <span className="text-brand font-mono">{crop.health}% Healthy</span>
+          {/* Metric Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-ink-muted uppercase tracking-wider">Total Scans</span>
+                <div className="w-7 h-7 rounded-lg bg-brand-light flex items-center justify-center text-brand">
+                  <Scan className="w-4 h-4" />
                 </div>
-                <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${crop.health}%` }} />
-                </div>
-                <div className="text-2xs text-ink-muted mt-1.5">{crop.scans} total scans recorded</div>
               </div>
-            ))}
-          </div>
-        </div>
+              <div className="text-2xl font-bold text-ink">{totalScans.toLocaleString()}</div>
+              <p className="text-2xs text-ink-muted mt-1">Processed leaf diagnoses</p>
+            </div>
 
-      </div>
-
-      {/* Real Scan History Telemetry Table */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-ink">Recent Real Scan Telemetry</h3>
-          <span className="text-xs text-ink-muted">{history.length} records</span>
-        </div>
-
-        {history.length === 0 ? (
-          <div className="p-8 text-center text-xs text-ink-muted">
-            No diagnostic scans recorded yet. Upload a leaf picture on the Diagnose page to populate live telemetry.
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {history.slice(0, 8).map((item, idx) => {
-              const diseaseStr = (item.disease || "Unknown").replace(/__/g, " ").replace(/_/g, " ");
-              const healthy = diseaseStr.toLowerCase().includes("healthy");
-              const imgUrl = item.img_url || (item.img_path ? `/uploads/${item.img_path}` : null);
-              const dateStr = item.scanned_at || item.timestamp ? new Date(item.scanned_at || item.timestamp).toLocaleString() : "Recent";
-
-              return (
-                <div key={idx} className="flex items-center gap-4 px-5 py-3.5 hover:bg-bg-subtle transition-colors">
-                  {imgUrl ? (
-                    <img
-                      src={imgUrl}
-                      alt={diseaseStr}
-                      className="w-10 h-10 rounded object-cover border border-border shrink-0"
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
-                  ) : (
-                    <div className={`w-3 h-3 rounded-full shrink-0 ${healthy ? "bg-success" : "bg-danger"}`} />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-ink truncate">{diseaseStr}</p>
-                    <p className="text-2xs text-ink-muted">{dateStr}</p>
-                  </div>
-                  <span className={`badge ${healthy ? "badge-success" : "badge-danger"} font-mono`}>
-                    {item.confidence}%
-                  </span>
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-ink-muted uppercase tracking-wider">Health Ratio</span>
+                <div className="w-7 h-7 rounded-lg bg-success-bg flex items-center justify-center text-success">
+                  <CheckCircle className="w-4 h-4" />
                 </div>
-              );
-            })}
+              </div>
+              <div className="text-2xl font-bold text-success">{healthyRatio}%</div>
+              <p className="text-2xs text-ink-muted mt-1">{healthyScans} healthy / {diseasedScans} diseased</p>
+            </div>
+
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-ink-muted uppercase tracking-wider">Top Host Crop</span>
+                <div className="w-7 h-7 rounded-lg bg-brand-light flex items-center justify-center text-brand">
+                  <Leaf className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-xl font-bold text-ink truncate">{mostScannedPlant}</div>
+              <p className="text-2xs text-ink-muted mt-1">Most scanned species</p>
+            </div>
+
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-ink-muted uppercase tracking-wider">Primary Issue</span>
+                <div className="w-7 h-7 rounded-lg bg-danger-bg flex items-center justify-center text-danger">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-xl font-bold text-danger truncate">{mostDetectedDisease}</div>
+              <p className="text-2xs text-ink-muted mt-1">Most diagnosed pathogen</p>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            {/* Weekly Activity Line/Bar Chart */}
+            <div className="lg:col-span-7 card p-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-ink">7-Day Diagnostic Volume</h3>
+                <p className="text-xs text-ink-muted">Scan volume by day</p>
+              </div>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={weeklyActivity} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "#FFFFFF", borderRadius: "8px", border: "1px solid #E5E7EB", fontSize: "12px" }}
+                    />
+                    <Bar dataKey="healthy" name="Healthy Leaves" fill="#16A34A" radius={[4, 4, 0, 0]} stackId="a" />
+                    <Bar dataKey="diseased" name="Diseased Leaves" fill="#DC2626" radius={[4, 4, 0, 0]} stackId="a" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Pathogen Distribution Donut */}
+            <div className="lg:col-span-5 card p-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-ink">Pathogen Distribution</h3>
+                <p className="text-xs text-ink-muted">Top diagnosed conditions</p>
+              </div>
+
+              {diseaseDist.length > 0 ? (
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={diseaseDist}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={75}
+                        paddingAngle={3}
+                        dataKey="count"
+                      >
+                        {diseaseDist.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color || PALETTE[index % PALETTE.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "#FFFFFF", borderRadius: "8px", border: "1px solid #E5E7EB", fontSize: "12px" }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : null}
+
+              <div className="space-y-1.5 pt-2">
+                {diseaseDist.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color || PALETTE[idx % PALETTE.length] }} />
+                      <span className="text-ink truncate max-w-[180px]">{item.name}</span>
+                    </div>
+                    <span className="font-mono font-bold text-ink-muted">{item.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Plant Distribution Breakdown */}
+          {plantDist.length > 0 && (
+            <div className="card p-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-ink">Crop Species Distribution</h3>
+                <p className="text-xs text-ink-muted">Proportion of scans across crop types</p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {plantDist.map((p, idx) => (
+                  <div key={idx} className="p-3.5 rounded-xl bg-bg-subtle border border-border">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Leaf className="w-4 h-4 text-brand shrink-0" />
+                      <span className="text-xs font-bold text-ink truncate">{p.plant}</span>
+                    </div>
+                    <div className="text-lg font-bold text-ink">{p.scans} scans</div>
+                    <div className="text-2xs text-ink-muted mt-0.5">
+                      {Math.round((p.scans / totalScans) * 100)}% of total
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
 
     </div>
   );

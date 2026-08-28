@@ -1,17 +1,14 @@
 // ═══════════════════════════════════════════════════════════════════════
-//  api.js — Authenticated API utility layer
-//  All requests to the backend go through these helpers.
-//  JWT token is automatically attached from localStorage.
-//  api.js — Authenticated API utility layer (v1.0.1)
+//  api.js — LeafGuard AI Authenticated API Utility Layer
+// ═══════════════════════════════════════════════════════════════════════
+
 const API_BASE = (import.meta.env.VITE_API_BASE || "/api/v1").replace(/\/$/, "");
 
-// ── Token helper ────────────────────────────────────────────────────────
-function getToken() {
-  return localStorage.getItem("plant_ai_token") || null;
+export function getToken() {
+  return localStorage.getItem("leafguard_token") || localStorage.getItem("plant_ai_token") || null;
 }
 
-// ── Auth headers ────────────────────────────────────────────────────────
-function authHeaders(extra = {}) {
+export function authHeaders(extra = {}) {
   const token = getToken();
   return {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -19,7 +16,6 @@ function authHeaders(extra = {}) {
   };
 }
 
-// ── Generic fetch wrapper ───────────────────────────────────────────────
 async function apiFetch(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -29,8 +25,9 @@ async function apiFetch(path, options = {}) {
     },
   });
 
-  // 401 = token expired or invalid → force logout
   if (res.status === 401) {
+    localStorage.removeItem("leafguard_token");
+    localStorage.removeItem("leafguard_user");
     localStorage.removeItem("plant_ai_token");
     localStorage.removeItem("plant_ai_user");
     window.location.href = "/login";
@@ -40,12 +37,8 @@ async function apiFetch(path, options = {}) {
   return res;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  Public API functions
-// ═══════════════════════════════════════════════════════════════════════
-
 /**
- * Check backend health status
+ * Health check
  */
 export async function checkBackendHealth() {
   try {
@@ -56,18 +49,19 @@ export async function checkBackendHealth() {
       const data = await res.json();
       return {
         online: true,
-        status: data.model_status || "live",
-        engine: data.engine || "AI Diagnostic Vision Model",
+        status: data.model?.status || "ready",
+        backend: data.model?.backend || "EfficientNetB0",
+        app: data.app || "LeafGuard AI"
       };
     }
   } catch {
-    // Backend unreachable
+    // Backend offline
   }
-  return { online: false, status: "offline", engine: "Backend Disconnected" };
+  return { online: false, status: "offline", backend: "Disconnected", app: "LeafGuard AI" };
 }
 
 /**
- * Fetch platform-wide stats (authenticated from MongoDB)
+ * Platform stats from real database
  */
 export async function fetchPlatformStats() {
   try {
@@ -75,9 +69,11 @@ export async function fetchPlatformStats() {
     if (res.ok) {
       const data = await res.json();
       return {
-        total_predictions: data.total_scans ?? data.total_predictions ?? 0,
+        total_predictions: data.total_scans ?? 0,
         top_disease: data.top_disease || "None",
         avg_confidence: data.avg_confidence || 0,
+        healthy_scans: data.healthy_scans || 0,
+        diseased_scans: data.diseased_scans || 0
       };
     }
   } catch (err) {
@@ -87,15 +83,33 @@ export async function fetchPlatformStats() {
     total_predictions: 0,
     top_disease: "None",
     avg_confidence: 0,
+    healthy_scans: 0,
+    diseased_scans: 0
   };
 }
 
 /**
- * Fetch scan history for current user (authenticated from MongoDB)
+ * Detailed real database analytics telemetry
  */
-export async function fetchHistory(limit = 50) {
+export async function fetchAnalyticsData() {
   try {
-    const res = await apiFetch(`/history?limit=${limit}`, {
+    const res = await apiFetch("/analytics", { signal: AbortSignal.timeout(5000) });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.error("Failed to fetch analytics:", err);
+  }
+  return null;
+}
+
+/**
+ * Scan history from database
+ */
+export async function fetchHistory(limit = 50, plant = "") {
+  try {
+    const query = plant ? `&plant=${encodeURIComponent(plant)}` : "";
+    const res = await apiFetch(`/history?limit=${limit}${query}`, {
       signal: AbortSignal.timeout(5000),
     });
     if (res.ok) {
@@ -103,18 +117,17 @@ export async function fetchHistory(limit = 50) {
       return data.history || [];
     }
   } catch (err) {
-    console.error("Failed to fetch scan history from MongoDB:", err);
+    console.error("Failed to fetch history:", err);
   }
   return [];
 }
 
 /**
- * Run AI diagnosis on a leaf image
- * @param {File} file - Image file
+ * Run AI leaf disease prediction
  */
 export async function predictLeafImage(file) {
   if (!file) {
-    throw new Error("Please select or capture a leaf image file.");
+    throw new Error("Please select or capture a plant leaf image.");
   }
 
   const formData = new FormData();
@@ -128,8 +141,8 @@ export async function predictLeafImage(file) {
   });
 
   if (res.status === 401) {
-    localStorage.removeItem("plant_ai_token");
-    localStorage.removeItem("plant_ai_user");
+    localStorage.removeItem("leafguard_token");
+    localStorage.removeItem("leafguard_user");
     window.location.href = "/login";
     throw new Error("Session expired. Please sign in again.");
   }
@@ -143,22 +156,7 @@ export async function predictLeafImage(file) {
 }
 
 /**
- * Fetch detailed telemetry for Analytics page
- */
-export async function fetchAnalyticsData() {
-  try {
-    const res = await apiFetch("/stats/analytics", { signal: AbortSignal.timeout(5000) });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.error("Failed to fetch analytics telemetry:", err);
-  }
-  return null;
-}
-
-/**
- * Delete a single history item from MongoDB and storage
+ * Delete a single history item
  */
 export async function deleteHistoryItem(id) {
   try {
@@ -173,7 +171,7 @@ export async function deleteHistoryItem(id) {
 }
 
 /**
- * Batch delete selected history items from MongoDB and storage
+ * Batch delete selected history items
  */
 export async function deleteHistoryBatch(ids) {
   try {
@@ -190,7 +188,7 @@ export async function deleteHistoryBatch(ids) {
 }
 
 /**
- * Clear all history from MongoDB and storage
+ * Clear all history
  */
 export async function clearAllHistory() {
   try {
@@ -203,5 +201,3 @@ export async function clearAllHistory() {
     return false;
   }
 }
-
-

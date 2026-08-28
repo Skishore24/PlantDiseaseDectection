@@ -12,9 +12,9 @@ export default function Footer() {
           <div className="w-5 h-5 rounded bg-brand flex items-center justify-center">
             <Leaf className="w-3 h-3 text-white" strokeWidth={2.5} />
           </div>
-          <span className="text-xs font-bold text-ink">PlantAI</span>
+          <span className="text-xs font-bold text-ink">LeafGuard AI</span>
           <span className="text-xs text-ink-muted">
-            © {new Date().getFullYear()} · Plant Disease &amp; Pathology Platform
+            © {new Date().getFullYear()} · AI-Powered Plant Leaf Pathology Platform
           </span>
         </div>
 

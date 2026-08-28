@@ -1,7 +1,7 @@
 {
-  "name": "plant-ai-frontend",
+  "name": "leafguard-ai",
   "private": true,
-  "version": "5.2.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host --port 5173",
@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
     "jspdf": "^2.5.1",
