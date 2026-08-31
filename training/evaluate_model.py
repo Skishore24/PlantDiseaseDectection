@@ -1,8 +1,7 @@
 """
 LeafGuard AI — Model Evaluation Pipeline
-Evaluates the trained EfficientNetB0 plant disease classification model,
-calculates Accuracy, Precision, Recall, F1-Score, Confusion Matrix, and saves model_metrics.json.
-Supports TensorFlow/Keras and PyTorch/Torchvision backends.
+Evaluates the trained EfficientNetB0 plant disease classification model on a validation/test dataset,
+calculates real Accuracy, Precision, Recall, F1-Score, Confusion Matrix, and saves model_metrics.json.
 """
 
 import os
@@ -19,7 +18,6 @@ PROJECT_ROOT = TRAINING_DIR.parent
 BACKEND_MODELS_DIR = PROJECT_ROOT / "backend" / "models"
 
 MODEL_KERAS_PATH = BACKEND_MODELS_DIR / "plant_disease_model.keras"
-MODEL_PTH_PATH = BACKEND_MODELS_DIR / "plant_disease_model.pth"
 CLASSES_PATH = BACKEND_MODELS_DIR / "class_names.json"
 METRICS_PATH = BACKEND_MODELS_DIR / "model_metrics.json"
 
@@ -30,6 +28,7 @@ logger = logging.getLogger("LeafGuardEvalEngine")
 def find_eval_dataset_path(root_dir: Path):
     candidate_roots = [
         root_dir / "dataset",
+        root_dir / "dataset" / "New Plant Diseases Dataset(Augmented)",
         root_dir / "PlantVillage",
         root_dir,
     ]
@@ -49,152 +48,125 @@ def find_eval_dataset_path(root_dir: Path):
     return None
 
 
-def evaluate_pytorch(eval_path: Path, model_file: Path, class_names: list):
-    import torch
-    import torch.nn as nn
-    from torch.utils.data import DataLoader
-    from torchvision import datasets, transforms, models
-    from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support, accuracy_score
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_classes = len(class_names)
-
-    val_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-
-    val_dataset = datasets.ImageFolder(str(eval_path), transform=val_transform)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=0)
-
-    model = models.efficientnet_b0(weights=None)
-    in_features = model.classifier[1].in_features
-    model.classifier = nn.Sequential(
-        nn.Dropout(p=0.3, inplace=False),
-        nn.Linear(in_features, 256),
-        nn.BatchNorm1d(256),
-        nn.ReLU(inplace=False),
-        nn.Dropout(p=0.2, inplace=False),
-        nn.Linear(256, num_classes)
-    )
-    state_dict = torch.load(str(model_file), map_location=device)
-    model.load_state_dict(state_dict)
-    model = model.to(device)
-    model.eval()
-
-    y_true, y_pred = [], []
-    logger.info("⚡ Generating predictions with PyTorch EfficientNetB0...")
-    with torch.no_grad():
-        for images, labels in val_loader:
-            images = images.to(device)
-            outputs = model(images)
-            _, preds = torch.max(outputs, 1)
-            y_true.extend(labels.cpu().numpy())
-            y_pred.extend(preds.cpu().numpy())
-
-    return np.array(y_true), np.array(y_pred)
-
-
 def evaluate_tensorflow(eval_path: Path, model_file: Path, class_names: list):
     import tensorflow as tf
-    from sklearn.metrics import accuracy_score
+    from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support, accuracy_score
 
+    logger.info(f"Loading TensorFlow/Keras model from: {model_file}")
     model = tf.keras.models.load_model(str(model_file), compile=False)
-    val_ds = tf.keras.utils.image_dataset_from_directory(
-        str(eval_path), image_size=(224, 224), batch_size=32, shuffle=False, label_mode="int"
+
+    num_classes = len(class_names)
+    eval_ds = tf.keras.utils.image_dataset_from_directory(
+        eval_path,
+        image_size=(224, 224),
+        batch_size=32,
+        shuffle=False,
+        label_mode="int"
     )
 
-    y_true, y_pred = [], []
-    logger.info("⚡ Generating predictions with TensorFlow/Keras EfficientNetB0...")
-    for images, labels in val_ds:
+    y_true = []
+    y_pred = []
+
+    logger.info("⚡ Generating evaluation predictions with EfficientNetB0...")
+    for images, labels in eval_ds:
         preds = model.predict(images, verbose=0)
-        pred_labels = np.argmax(preds, axis=1)
+        top_preds = np.argmax(preds, axis=1)
         y_true.extend(labels.numpy())
-        y_pred.extend(pred_labels)
+        y_pred.extend(top_preds)
 
     return np.array(y_true), np.array(y_pred)
 
 
-def evaluate(dataset_dir: str = "", model_path: str = ""):
-    from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support, accuracy_score
+def main():
+    parser = argparse.ArgumentParser(description="LeafGuard AI Model Evaluation")
+    parser.add_argument("--model-path", type=str, default="", help="Path to .keras model file")
+    parser.add_argument("--eval-dir", type=str, default="", help="Path to evaluation dataset")
+    args = parser.parse_args()
 
     logger.info("==================================================")
-    logger.info("🌿 LeafGuard AI — Model Evaluation Suite")
+    logger.info("🌿 LeafGuard AI — Model Evaluation Pipeline")
     logger.info("==================================================")
 
-    # Locate model checkpoint
-    if model_path:
-        target_model = Path(model_path).resolve()
-    elif MODEL_PTH_PATH.exists():
-        target_model = MODEL_PTH_PATH
-    elif MODEL_KERAS_PATH.exists():
-        target_model = MODEL_KERAS_PATH
-    else:
-        logger.error("❌ No trained model found (.pth or .keras).")
-        logger.error("Run 'python training/train_model.py' first.")
-        sys.exit(1)
-
+    # 1. Resolve Class Names
     if not CLASSES_PATH.exists():
-        logger.error(f"❌ Class names mapping not found at: {CLASSES_PATH}")
+        logger.error(f"❌ Class names definition not found at {CLASSES_PATH}")
         sys.exit(1)
 
     with open(CLASSES_PATH, "r", encoding="utf-8") as f:
         class_names = json.load(f)
 
-    if dataset_dir:
-        eval_path = find_eval_dataset_path(Path(dataset_dir).resolve())
+    # 2. Resolve Model File
+    target_model = Path(args.model_path) if args.model_path else MODEL_KERAS_PATH
+    if not target_model.exists():
+        logger.error(f"❌ Model artifact not found at {target_model}")
+        logger.info("Run 'python training/train_model.py' to train the model first.")
+        sys.exit(1)
+
+    # 3. Resolve Evaluation Dataset
+    if args.eval_dir:
+        eval_path = Path(args.eval_dir).resolve()
     else:
         eval_path = find_eval_dataset_path(PROJECT_ROOT)
 
-    if not eval_path:
-        logger.error(f"❌ Evaluation dataset folder not found under {dataset_dir or (PROJECT_ROOT / 'dataset')}.")
+    if not eval_path or not eval_path.exists():
+        logger.error(f"❌ Evaluation dataset not found at '{eval_path}'")
         sys.exit(1)
 
-    logger.info(f"📁 Loading Evaluation Data from: {eval_path}")
-    logger.info(f"📦 Loading Model from: {target_model}")
+    logger.info(f"📁 Evaluating on dataset: {eval_path}")
 
-    if target_model.suffix == ".pth":
-        y_true, y_pred = evaluate_pytorch(eval_path, target_model, class_names)
-    else:
-        y_true, y_pred = evaluate_tensorflow(eval_path, target_model, class_names)
+    # 4. Run Evaluation
+    try:
+        import tensorflow as tf
+        from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support, accuracy_score
+    except ImportError:
+        logger.error("❌ tensorflow and scikit-learn are required for model evaluation.")
+        sys.exit(1)
 
+    y_true, y_pred = evaluate_tensorflow(eval_path, target_model, class_names)
+
+    # 5. Compute Metrics
     acc = float(accuracy_score(y_true, y_pred))
-    precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average="macro", zero_division=0)
-    unique_labels = sorted(list(set(y_true)))
-    target_names = [class_names[i] if i < len(class_names) else f"Class_{i}" for i in unique_labels]
+    precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average="weighted", zero_division=0)
+    cm = confusion_matrix(y_true, y_pred).tolist()
 
-    report = classification_report(y_true, y_pred, target_names=target_names, output_dict=True, zero_division=0)
-    matrix = confusion_matrix(y_true, y_pred).tolist()
-
-    logger.info("\n" + classification_report(y_true, y_pred, target_names=target_names, zero_division=0))
-    logger.info(f"🏆 OVERALL ACCURACY: {acc * 100:.2f}%")
-    logger.info(f"🎯 MACRO F1-SCORE:  {f1 * 100:.2f}%")
+    # Per-class metrics
+    p_per, r_per, f1_per, sup_per = precision_recall_fscore_support(y_true, y_pred, average=None, zero_division=0)
+    per_class_summary = {}
+    for i, c_name in enumerate(class_names):
+        if i < len(p_per):
+            per_class_summary[c_name] = {
+                "precision": round(float(p_per[i]) * 100, 2),
+                "recall": round(float(r_per[i]) * 100, 2),
+                "f1": round(float(f1_per[i]) * 100, 2),
+                "support": int(sup_per[i]) if i < len(sup_per) else 0
+            }
 
     metrics_payload = {
-        "model_architecture": "EfficientNetB0",
+        "framework": "TensorFlow / Keras",
+        "architecture": "EfficientNetB0 (Transfer Learning)",
         "num_classes": len(class_names),
-        "dataset_path": str(eval_path),
-        "metrics": {
-            "test_accuracy": round(acc, 4),
-            "precision_macro": round(float(precision), 4),
-            "recall_macro": round(float(recall), 4),
-            "f1_score_macro": round(float(f1), 4)
-        },
-        "classification_report": report,
-        "confusion_matrix": matrix,
-        "disclaimer": "Predictions are generated by an AI model and may be incorrect. Results should be used as guidance and verified by agricultural professionals when necessary."
+        "overall_accuracy": round(acc * 100, 2),
+        "weighted_precision": round(float(precision) * 100, 2),
+        "weighted_recall": round(float(recall) * 100, 2),
+        "weighted_f1_score": round(float(f1) * 100, 2),
+        "evaluation_samples": int(len(y_true)),
+        "confusion_matrix": cm,
+        "per_class_metrics": per_class_summary,
+        "evaluation_dataset": str(eval_path.name)
     }
 
     with open(METRICS_PATH, "w", encoding="utf-8") as f:
         json.dump(metrics_payload, f, indent=2)
 
-    logger.info(f"💾 Metrics successfully exported to: {METRICS_PATH}")
+    logger.info("==================================================")
+    logger.info("📊 Evaluation Summary:")
+    logger.info(f"Accuracy:  {metrics_payload['overall_accuracy']}%")
+    logger.info(f"Precision: {metrics_payload['weighted_precision']}%")
+    logger.info(f"Recall:    {metrics_payload['weighted_recall']}%")
+    logger.info(f"F1-Score:  {metrics_payload['weighted_f1_score']}%")
+    logger.info(f"💾 Metrics saved to: {METRICS_PATH}")
+    logger.info("==================================================")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LeafGuard AI Model Evaluation Suite")
-    parser.add_argument("--dataset-dir", type=str, default="", help="Path to evaluation dataset")
-    parser.add_argument("--model-path", type=str, default="", help="Path to model file (.pth or .keras)")
-    args = parser.parse_args()
-    evaluate(dataset_dir=args.dataset_dir, model_path=args.model_path)
+    main()

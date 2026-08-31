@@ -1,8 +1,11 @@
 import os
+import logging
 from pathlib import Path
 from typing import List, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
+
+logger = logging.getLogger("leafguard.config")
 
 # Resolve project root path
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -30,6 +33,10 @@ class Settings(BaseSettings):
     CLASS_PATH: str = "backend/models/class_names.json"
     METRICS_PATH: str = "backend/models/model_metrics.json"
     DISEASE_INFO_PATH: str = "backend/data/disease_info.json"
+
+    # ── Prediction Confidence Threshold ───────
+    PREDICTION_CONFIDENCE_THRESHOLD: float = 60.0  # Percentage (0-100)
+    MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB
 
     # ── Rate Limiting ──────────────────────────
     RATE_LIMIT_PER_MINUTE: int = 60

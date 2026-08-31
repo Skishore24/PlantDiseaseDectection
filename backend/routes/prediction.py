@@ -6,10 +6,12 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, status, Depends
 from pydantic import BaseModel
 
+from backend.config import settings
 from backend.utils.auth import get_current_user
 from backend.services.image_service import image_service
 from backend.services.model_service import model_service
 from backend.services.disease_service import disease_service
+from backend.services.cv_service import cv_service
 from backend.database import db_manager, load_local_json, save_local_json
 
 logger = logging.getLogger("leafguard.prediction")
@@ -25,12 +27,38 @@ AI_DISCLAIMER = (
 # ─────────────────────────────────────────────────────────────
 # Response Models
 # ─────────────────────────────────────────────────────────────
+class ImageQualityInfo(BaseModel):
+    sharpness_score: float = 85.0
+    laplacian_variance: float = 150.0
+    is_blurry: bool = False
+    blur_label: str = "Sharp & Clear"
+    brightness: float = 128.0
+    exposure_status: str = "Optimal"
+    contrast: float = 50.0
+    contrast_status: str = "Normal"
+    foliage_coverage_percent: float = 80.0
+    is_leaf_detected: bool = True
+    quality_grade: str = "Good"
+
+
+class CVAnalysisResponse(BaseModel):
+    gradcam_heatmap_url: Optional[str] = None
+    segmented_overlay_url: Optional[str] = None
+    affected_area_percentage: float = 0.0
+    foliage_health_score: float = 100.0
+    lesion_count: int = 0
+    calculated_severity: str = "Optimal Health (0%)"
+    image_quality: ImageQualityInfo
+
+
 class PrimaryPrediction(BaseModel):
     plant: str
     disease: str
     class_name: str
     confidence: float
     severity: str
+    is_low_confidence: bool = False
+    guidance: Optional[str] = None
 
 
 class TopPredictionItem(BaseModel):
@@ -53,32 +81,34 @@ class PredictionResponse(BaseModel):
     prediction: PrimaryPrediction
     top_predictions: List[TopPredictionItem]
     disease_info: DiseaseInfoResponse
+    cv_analysis: Optional[CVAnalysisResponse] = None
     disclaimer: str
     id: Optional[str] = None
     created_at: Optional[str] = None
+
 
 
 # ─────────────────────────────────────────────────────────────
 # Helper to persist scan record
 # ─────────────────────────────────────────────────────────────
 def save_prediction_record(record: Dict[str, Any]) -> str:
-    # 1. Save to local JSON store fallback
+    # 1. Save to MongoDB if connected
+    coll = db_manager.get_collection("predictions")
+    if coll is not None:
+        try:
+            db_record = dict(record)
+            db_record["timestamp"] = datetime.now(timezone.utc)
+            res = coll.insert_one(db_record)
+            return str(res.inserted_id)
+        except Exception as e:
+            logger.warning(f"MongoDB prediction insert error: {e}")
+
+    # 2. Local fallback for development mode
     local_history = load_local_json("history_store.json")
     if not isinstance(local_history, list):
         local_history = []
     local_history.insert(0, record)
     save_local_json("history_store.json", local_history[:200])
-
-    # 2. Save to MongoDB if connected
-    coll = db_manager.get_collection("predictions")
-    if coll is not None:
-        try:
-            db_record = dict(record)
-            db_record["timestamp"] = datetime.utcnow()
-            res = coll.insert_one(db_record)
-            return str(res.inserted_id)
-        except Exception as e:
-            logger.warning(f"MongoDB prediction insert error: {e}")
 
     return record.get("id", str(uuid.uuid4()))
 
@@ -94,37 +124,78 @@ async def predict_leaf(
     """
     Run neural AI leaf disease diagnosis on an uploaded plant leaf image.
     Requires JWT authentication.
-    Validates file type (JPG, PNG, WEBP), file size, image headers via Pillow.
+    Flow: Validate -> Decode -> Preprocess -> Check Model -> Inference -> Response
     """
     user_id = current_user.get("email") or current_user.get("id") or "anonymous"
 
-    # 1. Validate image and read bytes
+    # 1. Validate image format, MIME, and integrity
     image_bytes, safe_filename = await image_service.validate_and_read(file)
 
-    # 2. Save to secure temporary file for inference
+    # 2. Preprocess image into (1, 224, 224, 3) float32 tensor
+    img_batch = image_service.preprocess_image(image_bytes)
+
+    # 3. Check model readiness
+    if not model_service.is_ready():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Plant disease model is unavailable. Please train or deploy the model before making predictions."
+        )
+
+    # 4. Save to secure temporary file for inference
     temp_path = image_service.create_temporary_file(image_bytes, safe_filename)
 
     try:
-        # 3. Preprocess image into (1, 224, 224, 3) tensor
-        img_batch = image_service.preprocess_image(image_bytes)
+        # 5. Execute model prediction
+        try:
+            top_class, confidence, top_3, is_live = model_service.predict(img_batch)
+        except RuntimeError as re:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(re)
+            )
 
-        # 4. Execute model prediction
-        top_class, confidence, top_3, is_live = model_service.predict(img_batch)
+        # 6. Run Computer Vision Suite (Grad-CAM, Lesion Segmentation, Quality Inspection)
+        is_healthy = "healthy" in top_class.lower()
+        class_names = model_service.get_class_names()
+        top_class_idx = class_names.index(top_class) if top_class in class_names else 0
+        raw_model = model_service.get_model()
 
-        # 5. Fetch disease information & agronomic advisory
+        cv_results = cv_service.run_cv_suite(
+            image_bytes=image_bytes,
+            model=raw_model,
+            top_class_idx=top_class_idx,
+            is_healthy=is_healthy
+        )
+
+        # 7. Fetch disease information & agronomic advisory
         info = disease_service.get_disease_info(top_class)
         parsed = disease_service.parse_class_name(top_class)
 
-        # 6. Build structured primary prediction
+        # Dynamic Severity: if healthy -> Optimal Health, else use CV calculated severity or info severity
+        calculated_severity = cv_results.get("calculated_severity", info.get("severity", "Moderate"))
+        display_severity = "Optimal Health" if is_healthy else (
+            calculated_severity.split(" ")[0] if " " in calculated_severity else info.get("severity", "Moderate")
+        )
+
+        # 8. Check confidence threshold
+        is_low_conf = confidence < settings.PREDICTION_CONFIDENCE_THRESHOLD
+        guidance = (
+            "Low-confidence result. Please upload a clearer leaf image or verify the result with an agricultural expert."
+            if is_low_conf
+            else None
+        )
+
         primary = {
             "plant": info.get("plant", parsed["plant"]),
             "disease": info.get("disease", parsed["disease"]),
             "class_name": top_class,
             "confidence": confidence,
-            "severity": info.get("severity", "Moderate")
+            "severity": display_severity,
+            "is_low_confidence": is_low_conf,
+            "guidance": guidance,
         }
 
-        # 7. Persist record to database
+        # 9. Persist record to database
         record_id = uuid.uuid4().hex
         now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -137,19 +208,14 @@ async def predict_leaf(
             "confidence": confidence,
             "severity": primary["severity"],
             "top_predictions": top_3,
-            "disease_info": {
-                "description": info.get("description", ""),
-                "symptoms": info.get("symptoms", []),
-                "causes": info.get("causes", []),
-                "treatment": info.get("treatment", []),
-                "prevention": info.get("prevention", [])
-            },
+            "affected_area_percentage": cv_results.get("affected_area_percentage", 0.0),
+            "lesion_count": cv_results.get("lesion_count", 0),
+            "foliage_health_score": cv_results.get("foliage_health_score", 100.0),
             "created_at": now_iso,
-            "scanned_at": now_iso,
         }
 
         saved_id = save_prediction_record(record)
-        logger.info(f"Scan completed: {primary['plant']} - {primary['disease']} ({confidence}%) user={user_id}")
+        logger.info(f"Scan completed: {primary['plant']} - {primary['disease']} ({confidence}%) [CV: {cv_results.get('affected_area_percentage')}% affected] user={user_id}")
 
         return {
             "success": True,
@@ -162,6 +228,7 @@ async def predict_leaf(
                 "treatment": info.get("treatment", []),
                 "prevention": info.get("prevention", [])
             },
+            "cv_analysis": cv_results,
             "disclaimer": AI_DISCLAIMER,
             "id": saved_id or record_id,
             "created_at": now_iso
@@ -170,3 +237,4 @@ async def predict_leaf(
     finally:
         # Guaranteed cleanup of temporary image file
         image_service.cleanup_temporary_file(temp_path)
+

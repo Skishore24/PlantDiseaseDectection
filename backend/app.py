@@ -11,7 +11,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 
 from backend.config import settings
 from backend.utils.logging_config import setup_logging
@@ -87,7 +86,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ─────────────────────────────────────────────────────────────
 # Mount API Routers
 # ─────────────────────────────────────────────────────────────
-# Mount root-level health check & API V1 routes
+# Root health & API V1 routes
 app.include_router(health_router)
 app.include_router(health_router, prefix=settings.API_V1_STR)
 
@@ -95,13 +94,6 @@ app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(predict_router, prefix=settings.API_V1_STR)
 app.include_router(history_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
-
-# ─────────────────────────────────────────────────────────────
-# Static Mounts
-# ─────────────────────────────────────────────────────────────
-uploads_dir = Path(__file__).resolve().parent / "uploads"
-uploads_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 
 @app.get("/docs", include_in_schema=False)

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -378,6 +379,19 @@ export default function Dashboard() {
                   </button>
                 </div>
               </div>
+
+              {/* Low Confidence Advisory */}
+              {scanResult?.prediction?.is_low_confidence && (
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-amber-700 dark:text-amber-300 animate-fade-in">
+                  <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" />
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider">Low Confidence Warning</h4>
+                    <p className="text-xs mt-0.5 leading-relaxed">
+                      {scanResult.prediction.guidance || "Low-confidence result. Please upload a clearer leaf image or verify the result with an agricultural expert."}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Top 3 Predictions Progress Bars */}
               {topPredictions.length > 0 && (

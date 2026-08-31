@@ -33,7 +33,7 @@ async def get_history(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Retrieve scan history for the current authenticated user.
+    Retrieve scan history strictly belonging to the current authenticated user.
     """
     user_id = current_user.get("email") or current_user.get("id")
 
@@ -56,18 +56,17 @@ async def get_history(
     if isinstance(local_items, list):
         filtered_local = [
             _normalize_id(x) for x in local_items
-            if (x.get("user_id") == user_id or x.get("user_id") == "anonymous")
+            if x.get("user_id") == user_id
             and (not plant or plant.lower() in str(x.get("plant", "")).lower())
         ]
-        # Merge deduplicating by ID or timestamp
         seen = set(x.get("id") for x in items)
         for loc in filtered_local:
             if loc.get("id") not in seen:
                 items.append(loc)
                 seen.add(loc.get("id"))
 
-    # Sort descending by timestamp / created_at
-    items.sort(key=lambda x: str(x.get("created_at") or x.get("scanned_at") or ""), reverse=True)
+    # Sort descending by created_at
+    items.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
     return {"history": items[:limit], "total": len(items)}
 
 
@@ -78,6 +77,7 @@ async def get_history_item(
 ):
     """
     Retrieve details of a single scan record.
+    Enforces authorization: users can only view their own records.
     """
     user_id = current_user.get("email") or current_user.get("id")
 
@@ -101,10 +101,10 @@ async def get_history_item(
     local_items = load_local_json("history_store.json")
     if isinstance(local_items, list):
         for item in local_items:
-            if item.get("id") == item_id or str(item.get("_id")) == item_id:
+            if item.get("user_id") == user_id and (item.get("id") == item_id or str(item.get("_id")) == item_id):
                 return _normalize_id(item)
 
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan record not found.")
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan record not found or access denied.")
 
 
 @router.delete("/{item_id}")
@@ -113,7 +113,7 @@ async def delete_history_item(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Delete a single scan record from history.
+    Delete a single scan record belonging to the authenticated user.
     """
     user_id = current_user.get("email") or current_user.get("id")
     deleted = False
@@ -134,7 +134,7 @@ async def delete_history_item(
     # 2. Delete from local JSON store
     local_items = load_local_json("history_store.json")
     if isinstance(local_items, list):
-        updated = [x for x in local_items if x.get("id") != item_id and str(x.get("_id")) != item_id]
+        updated = [x for x in local_items if not (x.get("user_id") == user_id and (x.get("id") == item_id or str(x.get("_id")) == item_id))]
         if len(updated) != len(local_items):
             deleted = True
             save_local_json("history_store.json", updated)
@@ -148,7 +148,7 @@ async def delete_history_batch(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Delete multiple scan records in batch.
+    Delete multiple scan records belonging to the authenticated user.
     """
     user_id = current_user.get("email") or current_user.get("id")
     deleted_count = 0
@@ -175,7 +175,7 @@ async def delete_history_batch(
     local_items = load_local_json("history_store.json")
     if isinstance(local_items, list):
         id_set = set(body.ids)
-        updated = [x for x in local_items if x.get("id") not in id_set and str(x.get("_id")) not in id_set]
+        updated = [x for x in local_items if not (x.get("user_id") == user_id and (x.get("id") in id_set or str(x.get("_id")) in id_set))]
         deleted_local = len(local_items) - len(updated)
         if deleted_local > 0:
             save_local_json("history_store.json", updated)
@@ -188,7 +188,7 @@ async def delete_history_batch(
 @router.delete("/")
 async def clear_all_history(current_user: dict = Depends(get_current_user)):
     """
-    Clear all scan history records for the current user.
+    Clear all scan history records for the current authenticated user.
     """
     user_id = current_user.get("email") or current_user.get("id")
 
@@ -203,7 +203,7 @@ async def clear_all_history(current_user: dict = Depends(get_current_user)):
     # 2. Clear in local store
     local_items = load_local_json("history_store.json")
     if isinstance(local_items, list):
-        updated = [x for x in local_items if x.get("user_id") != user_id and x.get("user_id") != "anonymous"]
+        updated = [x for x in local_items if x.get("user_id") != user_id]
         save_local_json("history_store.json", updated)
 
     return {"success": True, "message": "All history records cleared successfully."}

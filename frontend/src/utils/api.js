@@ -2,7 +2,11 @@
 //  api.js — LeafGuard AI Authenticated API Utility Layer
 // ═══════════════════════════════════════════════════════════════════════
 
-const API_BASE = (import.meta.env.VITE_API_BASE || "/api/v1").replace(/\/$/, "");
+const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_BASE ||
+  "/api/v1"
+).replace(/\/$/, "");
 
 export function getToken() {
   return localStorage.getItem("leafguard_token") || localStorage.getItem("plant_ai_token") || null;
@@ -34,6 +38,12 @@ async function apiFetch(path, options = {}) {
     throw new Error("Session expired. Please sign in again.");
   }
 
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const message = err.detail || `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
+
   return res;
 }
 
@@ -50,14 +60,15 @@ export async function checkBackendHealth() {
       return {
         online: true,
         status: data.model?.status || "ready",
-        backend: data.model?.backend || "EfficientNetB0",
-        app: data.app || "LeafGuard AI"
+        backend: data.model?.backend || "EfficientNetB0 (TensorFlow/Keras)",
+        app: data.app || "LeafGuard AI",
+        num_classes: data.model?.num_classes || 38,
       };
     }
   } catch {
     // Backend offline
   }
-  return { online: false, status: "offline", backend: "Disconnected", app: "LeafGuard AI" };
+  return { online: false, status: "offline", backend: "Disconnected", app: "LeafGuard AI", num_classes: 0 };
 }
 
 /**
@@ -73,7 +84,7 @@ export async function fetchPlatformStats() {
         top_disease: data.top_disease || "None",
         avg_confidence: data.avg_confidence || 0,
         healthy_scans: data.healthy_scans || 0,
-        diseased_scans: data.diseased_scans || 0
+        diseased_scans: data.diseased_scans || 0,
       };
     }
   } catch (err) {
@@ -84,7 +95,7 @@ export async function fetchPlatformStats() {
     top_disease: "None",
     avg_confidence: 0,
     healthy_scans: 0,
-    diseased_scans: 0
+    diseased_scans: 0,
   };
 }
 
@@ -147,8 +158,22 @@ export async function predictLeafImage(file) {
     throw new Error("Session expired. Please sign in again.");
   }
 
+  if (res.status === 503) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      err.detail ||
+      "Plant disease model is unavailable. Please train or deploy the model before making predictions."
+    );
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 413) {
+      throw new Error("Uploaded file is too large. Maximum file size is 10 MB.");
+    }
+    if (res.status === 429) {
+      throw new Error("Rate limit exceeded. Please wait a moment before trying again.");
+    }
     throw new Error(err.detail || `Server error (${res.status})`);
   }
 

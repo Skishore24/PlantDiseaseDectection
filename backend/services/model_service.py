@@ -12,7 +12,6 @@ logger = logging.getLogger("leafguard.model_service")
 
 # Singleton state
 _model = None
-_model_backend = None  # 'tensorflow', 'pytorch', or 'unloaded'
 _model_lock = threading.Lock()
 _class_names: Optional[List[str]] = None
 
@@ -58,121 +57,84 @@ class ModelService:
         return self._load_class_names()
 
     def _load_model(self):
-        global _model, _model_backend
+        global _model
         if _model is not None:
-            return _model, _model_backend
+            return _model
 
         with _model_lock:
             if _model is not None:
-                return _model, _model_backend
+                return _model
 
             class_names = self.get_class_names()
             num_classes = len(class_names)
 
-            # 1. Attempt TensorFlow/Keras (.keras / .h5)
             keras_path = settings.get_model_path()
             if os.path.exists(keras_path):
                 try:
-                    logger.info(f"Loading TensorFlow/Keras model: {keras_path}")
+                    logger.info(f"Loading TensorFlow/Keras EfficientNetB0 model: {keras_path}")
                     try:
                         import tensorflow as tf
                         model = tf.keras.models.load_model(keras_path, compile=False)
                     except ImportError:
-                        os.environ.setdefault("KERAS_BACKEND", "torch")
                         import keras
                         model = keras.models.load_model(keras_path, compile=False)
 
+                    # Validate model output dimension
+                    output_dim = model.output_shape[-1]
+                    if output_dim != num_classes:
+                        logger.error(
+                            f"❌ Model artifact mismatch! Model output contains {output_dim} classes "
+                            f"but class_names.json contains {num_classes} classes."
+                        )
+                        _model = None
+                        return None
+
+                    # Warmup prediction
                     dummy = np.zeros((1, 224, 224, 3), dtype="float32")
                     model.predict(dummy, verbose=0)
                     _model = model
-                    _model_backend = "tensorflow"
-                    logger.info("TensorFlow/Keras EfficientNetB0 initialized.")
-                    return _model, _model_backend
+                    logger.info(f"✅ TensorFlow/Keras EfficientNetB0 initialized successfully ({num_classes} classes).")
+                    return _model
                 except Exception as e:
                     logger.warning(f"Failed to load Keras model at {keras_path}: {e}")
+                    _model = None
+                    return None
 
-            # 2. Attempt PyTorch (.pth)
-            pth_candidates = [
-                Path(keras_path).with_suffix(".pth"),
-                Path(__file__).resolve().parent.parent / "models" / "plant_disease_model.pth"
-            ]
-            for pth_path in pth_candidates:
-                if pth_path.exists():
-                    try:
-                        logger.info(f"Loading PyTorch EfficientNetB0 weights: {pth_path}")
-                        import torch
-                        import torch.nn as nn
-                        from torchvision import models
-
-                        m = models.efficientnet_b0(weights=None)
-                        in_features = m.classifier[1].in_features
-                        m.classifier = nn.Sequential(
-                            nn.Dropout(p=0.3, inplace=False),
-                            nn.Linear(in_features, 256),
-                            nn.BatchNorm1d(256),
-                            nn.ReLU(inplace=False),
-                            nn.Dropout(p=0.2, inplace=False),
-                            nn.Linear(256, num_classes)
-                        )
-                        state = torch.load(str(pth_path), map_location=torch.device("cpu"))
-                        m.load_state_dict(state)
-                        m.eval()
-                        _model = m
-                        _model_backend = "pytorch"
-                        logger.info("PyTorch EfficientNetB0 initialized.")
-                        return _model, _model_backend
-                    except Exception as e:
-                        logger.warning(f"Failed to load PyTorch weights from {pth_path}: {e}")
-
-            logger.info("No trained weights found. System ready for training ('python training/train_model.py').")
             _model = None
-            _model_backend = "unloaded"
-            return None, "unloaded"
+            return None
+
+    def is_ready(self) -> bool:
+        """Returns True if the ML model is successfully loaded and ready for inference."""
+        model = self._load_model()
+        return model is not None
+
+    def get_model(self):
+        """Returns the loaded Keras model instance."""
+        return self._load_model()
 
     def predict(self, img_batch: np.ndarray) -> Tuple[str, float, List[Dict[str, Any]], bool]:
         """
-        Executes model inference on a preprocessed (1, 224, 224, 3) image batch.
+        Executes real neural model inference on a preprocessed (1, 224, 224, 3) image batch.
         Returns: (top_class_name, confidence_percent, top_3_predictions, is_model_live)
+        Raises RuntimeError if model is unavailable.
         """
-        model, backend = self._load_model()
+        model = self._load_model()
+        if model is None:
+            raise RuntimeError("Plant disease model is unavailable. Please train or deploy the model before making predictions.")
+
         class_names = self.get_class_names()
         num_classes = len(class_names)
 
-        probabilities = None
+        # Validate input shape
+        if img_batch.shape != (1, 224, 224, 3):
+            raise ValueError(f"Expected image batch shape (1, 224, 224, 3), received {img_batch.shape}")
 
-        if backend == "tensorflow" and model is not None:
-            try:
-                raw_preds = model.predict(img_batch, verbose=0)[0]
-                probabilities = np.array(raw_preds, dtype=np.float32)
-            except Exception as e:
-                logger.error(f"TensorFlow inference failed: {e}")
-
-        elif backend == "pytorch" and model is not None:
-            try:
-                import torch
-                # (1, 224, 224, 3) -> (1, 3, 224, 224) with ImageNet normalization
-                img_t = torch.from_numpy(img_batch).permute(0, 3, 1, 2).float() / 255.0
-                mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
-                std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
-                img_norm = (img_t - mean) / std
-
-                with torch.no_grad():
-                    logits = model(img_norm)
-                    probs = torch.nn.functional.softmax(logits[0], dim=0).cpu().numpy()
-                    probabilities = probs
-            except Exception as e:
-                logger.error(f"PyTorch inference failed: {e}")
-
-        is_live = probabilities is not None
-
-        # If model is unavailable or inference failed, use deterministic heuristic for testing
-        if probabilities is None:
-            seed = int(np.abs(img_batch.mean() * 100000)) % 10000
-            rng = np.random.RandomState(seed)
-            raw_scores = rng.dirichlet(np.ones(num_classes) * 0.2)
-            top_idx = int(rng.choice(num_classes))
-            raw_scores[top_idx] += 4.0
-            probabilities = raw_scores / np.sum(raw_scores)
+        try:
+            raw_preds = model.predict(img_batch, verbose=0)[0]
+            probabilities = np.array(raw_preds, dtype=np.float32)
+        except Exception as e:
+            logger.error(f"TensorFlow inference failed: {e}")
+            raise RuntimeError(f"Model prediction failed during inference: {e}")
 
         # Compute top index and confidence
         top_idx = int(np.argmax(probabilities))
@@ -199,17 +161,17 @@ class ModelService:
                 if len(top_3) >= 3:
                     break
 
-        return top_class, round(top_conf, 2), top_3, is_live
+        return top_class, round(top_conf, 2), top_3, True
 
     def get_model_status(self) -> Dict[str, Any]:
-        _, backend = self._load_model()
+        is_live = self.is_ready()
         return {
-            "status": "ready" if backend in ["tensorflow", "pytorch"] else "training_required",
-            "backend": f"EfficientNetB0 ({backend.capitalize() if backend else 'Unloaded'})",
+            "status": "ready" if is_live else "training_required",
+            "backend": "TensorFlow / Keras",
             "architecture": "EfficientNetB0 (Transfer Learning)",
             "num_classes": len(self.get_class_names()),
             "classes_file": os.path.exists(settings.get_class_path()),
-            "model_file": os.path.exists(settings.get_model_path()) or os.path.exists(str(Path(settings.get_model_path()).with_suffix(".pth"))),
+            "model_file": os.path.exists(settings.get_model_path()),
         }
 
 

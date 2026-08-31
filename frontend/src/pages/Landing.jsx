@@ -70,18 +70,20 @@ const STEPS = [
 ];
 
 const SUPPORTED_PLANTS = [
-  { name: "Tomato", count: "10 Conditions", image: "/images/early_blight_leaf.png" },
-  { name: "Potato", count: "3 Conditions", image: "/images/diseased_leaf_hero.png" },
-  { name: "Apple", count: "4 Conditions", image: "/images/healthy_leaf.png" },
-  { name: "Grape", count: "4 Conditions", image: "/images/bacterial_spot_leaf.png" },
-  { name: "Bell Pepper", count: "2 Conditions", image: "/images/bacterial_spot_leaf.png" },
-  { name: "Corn (Maize)", count: "4 Conditions", image: "/images/diseased_leaf_hero.png" },
-  { name: "Strawberry", count: "2 Conditions", image: "/images/healthy_leaf.png" },
-  { name: "Peach", count: "2 Conditions", image: "/images/early_blight_leaf.png" },
-  { name: "Cherry", count: "2 Conditions", image: "/images/bacterial_spot_leaf.png" },
-  { name: "Blueberry", count: "Healthy Benchmark", image: "/images/healthy_leaf.png" },
-  { name: "Soybean", count: "Healthy Benchmark", image: "/images/healthy_leaf.png" },
-  { name: "Squash", count: "Powdery Mildew", image: "/images/diseased_leaf_hero.png" },
+  { name: "Tomato", count: "10 Conditions", image: "/images/tomato_leaf.png" },
+  { name: "Potato", count: "3 Conditions", image: "/images/potato_leaf.png" },
+  { name: "Apple", count: "4 Conditions", image: "/images/apple_leaf.png" },
+  { name: "Grape", count: "4 Conditions", image: "/images/grape_leaf.png" },
+  { name: "Bell Pepper", count: "2 Conditions", image: "/images/bell_pepper_leaf.png" },
+  { name: "Corn (Maize)", count: "4 Conditions", image: "/images/corn_leaf.png" },
+  { name: "Strawberry", count: "2 Conditions", image: "/images/strawberry_leaf.png" },
+  { name: "Peach", count: "2 Conditions", image: "/images/peach_leaf.png" },
+  { name: "Cherry", count: "2 Conditions", image: "/images/cherry_leaf.png" },
+  { name: "Blueberry", count: "Healthy Benchmark", image: "/images/blueberry_leaf.png" },
+  { name: "Soybean", count: "Healthy Benchmark", image: "/images/soybean_leaf.png" },
+  { name: "Squash", count: "Powdery Mildew", image: "/images/squash_leaf.png" },
+  { name: "Orange", count: "Citrus Greening", image: "/images/orange_leaf.png" },
+  { name: "Raspberry", count: "Healthy Benchmark", image: "/images/raspberry_leaf.png" },
 ];
 
 const FAQS = [

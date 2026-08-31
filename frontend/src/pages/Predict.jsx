@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Camera, ImageUp, Sparkles, X, Download, CheckCircle2,
   AlertTriangle, ClipboardList, TestTube, ShieldCheck,
-  Leaf, Clock, RefreshCw, AlertCircle, HelpCircle, Info
+  Leaf, Clock, RefreshCw, AlertCircle, HelpCircle, Info,
+  Eye, Flame, Layers, Activity, Scan, Focus
 } from "lucide-react";
 import { predictLeafImage, fetchHistory } from "../utils/api";
 import { generatePDFReport } from "../utils/pdfExport";
@@ -23,8 +24,10 @@ export default function Predict() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("about");
+  const [cvViewMode, setCvViewMode] = useState("original"); // "original" | "gradcam" | "segmentation"
   const [recentScans, setRecentScans] = useState([]);
   const [errorMsg, setErrorMsg] = useState(null);
+
 
   const fileInputRef = useRef(null);
 
@@ -86,6 +89,7 @@ export default function Predict() {
     setSelectedFile(null);
     setScanResult(null);
     setErrorMsg(null);
+    setCvViewMode("original");
   };
 
   const primary = scanResult?.prediction || {};
@@ -95,7 +99,16 @@ export default function Predict() {
   const severity = primary.severity || "Moderate";
   const topPredictions = scanResult?.top_predictions || [];
   const diseaseInfo = scanResult?.disease_info || {};
-  const isHealthy = diseaseName.toLowerCase().includes("healthy") || severity.toLowerCase() === "optimal health";
+  const cvAnalysis = scanResult?.cv_analysis || null;
+  const isHealthy = diseaseName.toLowerCase().includes("healthy") || severity.toLowerCase().includes("optimal health");
+
+  // Determine active display image based on CV view mode
+  const activeDisplayImage = (() => {
+    if (!scanResult || !cvAnalysis) return previewUrl;
+    if (cvViewMode === "gradcam" && cvAnalysis.gradcam_heatmap_url) return cvAnalysis.gradcam_heatmap_url;
+    if (cvViewMode === "segmentation" && cvAnalysis.segmented_overlay_url) return cvAnalysis.segmented_overlay_url;
+    return previewUrl;
+  })();
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in max-w-6xl mx-auto">
@@ -105,7 +118,7 @@ export default function Predict() {
         <div>
           <h2 className="text-xl font-bold text-ink">Diagnose Plant Leaf</h2>
           <p className="text-sm text-ink-muted mt-0.5">
-            Upload or capture a leaf photo to identify diseases and receive expert treatment guidance.
+            Upload or capture a leaf photo to identify diseases, inspect computer vision heatmaps, and quantify surface damage.
           </p>
         </div>
 
@@ -122,7 +135,7 @@ export default function Predict() {
           </div>
         )}
 
-        {/* Dropzone */}
+        {/* Dropzone & Preview Box */}
         <div
           className={`upload-zone relative overflow-hidden transition-all ${isDragOver ? "drag-over" : ""}`}
           onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
@@ -189,19 +202,72 @@ export default function Predict() {
               </div>
             </div>
           ) : (
-            <div className="relative p-3 bg-bg-subtle min-h-[300px] rounded-xl flex items-center justify-center border border-border overflow-hidden">
-              <img
-                src={previewUrl}
-                alt="Leaf preview"
-                className="w-full max-h-[380px] object-contain rounded-lg"
-              />
-              <button
-                onClick={handleClear}
-                className="absolute top-4 right-4 z-20 p-2 rounded-xl bg-surface/90 backdrop-blur-md border border-border text-ink-muted hover:text-danger shadow-md transition-all"
-                title="Clear preview"
-              >
-                <X className="w-4 h-4" />
-              </button>
+            <div className="relative p-3 bg-bg-subtle min-h-[320px] rounded-xl flex flex-col items-center justify-center border border-border overflow-hidden">
+              
+              {/* Top Bar for Vision Mode Controls */}
+              {scanResult && cvAnalysis && (
+                <div className="w-full flex flex-wrap items-center justify-between gap-2 mb-3 px-2 z-10">
+                  <div className="flex items-center gap-1 p-1 bg-surface/90 backdrop-blur-md rounded-xl border border-border shadow-xs">
+                    <button
+                      onClick={() => setCvViewMode("original")}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-2xs font-bold transition-all ${
+                        cvViewMode === "original"
+                          ? "bg-brand text-white shadow-xs"
+                          : "text-ink-muted hover:text-ink hover:bg-bg-subtle"
+                      }`}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Original
+                    </button>
+                    <button
+                      onClick={() => setCvViewMode("gradcam")}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-2xs font-bold transition-all ${
+                        cvViewMode === "gradcam"
+                          ? "bg-amber-500 text-white shadow-xs"
+                          : "text-ink-muted hover:text-ink hover:bg-bg-subtle"
+                      }`}
+                    >
+                      <Flame className="w-3.5 h-3.5 text-amber-300" />
+                      Grad-CAM Heatmap
+                    </button>
+                    <button
+                      onClick={() => setCvViewMode("segmentation")}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-2xs font-bold transition-all ${
+                        cvViewMode === "segmentation"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "text-ink-muted hover:text-ink hover:bg-bg-subtle"
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      Lesion Contours
+                    </button>
+                  </div>
+
+                  <span className="text-2xs font-semibold text-ink-muted px-2 py-1 rounded-md bg-surface/80 border border-border">
+                    {cvViewMode === "gradcam"
+                      ? "🔥 Neural Attention Heatmap"
+                      : cvViewMode === "segmentation"
+                      ? "🧪 Foliage & Lesion Segmentation"
+                      : "🌿 Original Sensor Capture"}
+                  </span>
+                </div>
+              )}
+
+              <div className="relative w-full flex items-center justify-center">
+                <img
+                  src={activeDisplayImage}
+                  alt="Leaf analysis visualization"
+                  className="w-full max-h-[380px] object-contain rounded-lg transition-all duration-300"
+                />
+
+                <button
+                  onClick={handleClear}
+                  className="absolute top-2 right-2 z-20 p-2 rounded-xl bg-surface/90 backdrop-blur-md border border-border text-ink-muted hover:text-danger shadow-md transition-all"
+                  title="Clear preview"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
               {isLoading && (
                 <div className="absolute inset-0 z-10 bg-surface/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center gap-3">
@@ -210,8 +276,8 @@ export default function Predict() {
                     <Sparkles className="absolute inset-0 m-auto w-5 h-5 text-brand" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-ink">Analyzing Plant Leaf…</p>
-                    <p className="text-xs text-ink-muted mt-1">Comparing visual features with 38 disease categories</p>
+                    <p className="text-sm font-bold text-ink">Running Computer Vision Pipeline…</p>
+                    <p className="text-xs text-ink-muted mt-1">Generating Grad-CAM attention heatmaps & lesion segmentation</p>
                   </div>
                 </div>
               )}
@@ -266,6 +332,108 @@ export default function Predict() {
                   </button>
                 </div>
               </div>
+
+              {/* Computer Vision Telemetry & Lesion Quantification Card */}
+              {cvAnalysis && (
+                <div className="card p-5 space-y-4 border border-brand-border/40 bg-gradient-to-br from-surface to-bg-subtle">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-brand" />
+                      <h4 className="text-xs font-bold text-ink uppercase tracking-wider">
+                        Computer Vision & Lesion Quantification
+                      </h4>
+                    </div>
+                    <span className="badge badge-brand text-2xs">OpenCV + Grad-CAM</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Affected Surface Area */}
+                    <div className="p-3.5 rounded-xl bg-surface border border-border">
+                      <div className="text-2xs font-bold text-ink-muted uppercase tracking-wider">
+                        Affected Foliage Area
+                      </div>
+                      <div className="text-lg font-black text-ink mt-1 flex items-baseline gap-1">
+                        <span>{cvAnalysis.affected_area_percentage}%</span>
+                        <span className="text-2xs font-normal text-ink-muted">of surface</span>
+                      </div>
+                      <div className="progress-bar mt-2">
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${Math.min(100, Math.max(5, cvAnalysis.affected_area_percentage))}%`,
+                            backgroundColor: cvAnalysis.affected_area_percentage > 25 ? "#EF4444" : (cvAnalysis.affected_area_percentage > 10 ? "#F59E0B" : "#10B981")
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Foliage Health Score */}
+                    <div className="p-3.5 rounded-xl bg-surface border border-border">
+                      <div className="text-2xs font-bold text-ink-muted uppercase tracking-wider">
+                        Foliage Health Score
+                      </div>
+                      <div className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-1 flex items-baseline gap-1">
+                        <span>{cvAnalysis.foliage_health_score}</span>
+                        <span className="text-2xs font-normal text-ink-muted">/ 100</span>
+                      </div>
+                      <div className="text-2xs text-ink-muted mt-2 font-medium">
+                        {cvAnalysis.calculated_severity}
+                      </div>
+                    </div>
+
+                    {/* Lesion Clusters */}
+                    <div className="p-3.5 rounded-xl bg-surface border border-border">
+                      <div className="text-2xs font-bold text-ink-muted uppercase tracking-wider">
+                        Lesions Detected
+                      </div>
+                      <div className="text-lg font-black text-ink mt-1 flex items-baseline gap-1">
+                        <span>{cvAnalysis.lesion_count}</span>
+                        <span className="text-2xs font-normal text-ink-muted">spots counted</span>
+                      </div>
+                      <div className="text-2xs text-ink-muted mt-2 font-medium">
+                        Morphological contours
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pre-flight Image Quality Checklist */}
+                  {cvAnalysis.image_quality && (
+                    <div className="pt-2 border-t border-border/70 flex flex-wrap items-center justify-between gap-2 text-2xs">
+                      <div className="flex items-center gap-1.5 font-medium text-ink-muted">
+                        <Focus className="w-3.5 h-3.5 text-brand" />
+                        <span>Focus / Clarity:</span>
+                        <span className={`font-bold ${cvAnalysis.image_quality.is_blurry ? "text-danger" : "text-success"}`}>
+                          {cvAnalysis.image_quality.blur_label} ({cvAnalysis.image_quality.sharpness_score} pts)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 font-medium text-ink-muted">
+                        <span>Exposure:</span>
+                        <span className="font-bold text-ink">{cvAnalysis.image_quality.exposure_status}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 font-medium text-ink-muted">
+                        <span>Foliage Coverage:</span>
+                        <span className="font-bold text-ink">{cvAnalysis.image_quality.foliage_coverage_percent}%</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+
+              {/* Low Confidence Advisory */}
+              {scanResult?.prediction?.is_low_confidence && (
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-amber-700 dark:text-amber-300 animate-fade-in">
+                  <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" />
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider">Low Confidence Warning</h4>
+                    <p className="text-xs mt-0.5 leading-relaxed">
+                      {scanResult.prediction.guidance || "Low-confidence result. Please upload a clearer leaf image or verify the result with an agricultural expert."}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Disease Guidance Tabs */}
               <div className="card p-6 space-y-4">
