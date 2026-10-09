@@ -226,3 +226,88 @@ export async function clearAllHistory() {
     return false;
   }
 }
+
+/**
+ * Analyze a throttled camera frame in real-time
+ */
+export async function analyzeCameraFrame(blobOrFile, signal) {
+  if (!blobOrFile) return null;
+
+  const formData = new FormData();
+  formData.append("file", blobOrFile, "frame.jpg");
+
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/camera/analyze`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+    signal,
+  });
+
+  if (res.status === 401) {
+    localStorage.removeItem("leafguard_token");
+    localStorage.removeItem("leafguard_user");
+    window.location.href = "/login";
+    throw new Error("Session expired. Please sign in again.");
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Camera analysis failed (${res.status})`);
+  }
+
+  return await res.json();
+}
+
+/**
+ * Save captured camera diagnosis to history and generate full report
+ */
+export async function saveCameraDiagnosis(data) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/camera/save`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (res.status === 401) {
+    localStorage.removeItem("leafguard_token");
+    localStorage.removeItem("leafguard_user");
+    window.location.href = "/login";
+    throw new Error("Session expired. Please sign in again.");
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to save camera diagnosis (${res.status})`);
+  }
+
+  return await res.json();
+}
+
+/**
+ * Get camera service and hardware acceleration status
+ */
+export async function getCameraStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/camera/status`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn("Unable to fetch camera status:", err);
+  }
+  return {
+    service: "LiveLeafScanner",
+    camera_confidence_threshold: 70.0,
+    model_ready: false,
+    device: "CPU",
+    num_classes: 38,
+  };
+}
+

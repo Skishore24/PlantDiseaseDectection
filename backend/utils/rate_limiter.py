@@ -121,9 +121,24 @@ auth_security_tracker = AuthSecurityTracker(
 )
 
 
+
+# Paths exempt from the global rate limiter (camera streams at ~3 req/sec by design)
+_RATE_LIMIT_EXEMPT_PATHS = {
+    "/api/v1/camera/analyze",
+    "/api/v1/camera/status",
+}
+
+
 async def rate_limit_dependency(request: Request):
-    """FastAPI dependency to enforce rate limits per client IP."""
+    """FastAPI dependency to enforce rate limits per client IP.
+    Camera frame-stream endpoints are exempt — they are already throttled
+    on the client side and operate at a much higher frequency than normal routes.
+    """
     if not settings.RATE_LIMIT_ENABLED:
+        return
+
+    # Skip global limiter for camera streaming endpoints
+    if request.url.path in _RATE_LIMIT_EXEMPT_PATHS:
         return
 
     client_ip = request.client.host if request.client else "127.0.0.1"

@@ -36,6 +36,8 @@ class Settings(BaseSettings):
 
     # ── Prediction Confidence Threshold ───────
     PREDICTION_CONFIDENCE_THRESHOLD: float = 60.0  # Percentage (0-100)
+    CAMERA_CONFIDENCE_THRESHOLD: float = 70.0      # Live camera confidence threshold
+    CAMERA_MAX_FRAME_DIM: int = 640                # Maximum resolution dimension for camera frame stream
     MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB
 
     # ── Rate Limiting ──────────────────────────

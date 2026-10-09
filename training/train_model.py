@@ -77,9 +77,17 @@ def train_tensorflow(train_path: Path, val_path: Path, args):
     """
     Executes transfer learning with EfficientNetB0 in TensorFlow/Keras.
     """
-    import tensorflow as tf
-    from tensorflow.keras import layers, models
-    from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+    try:
+        import tensorflow as tf
+        from tensorflow.keras import layers, models
+        from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+    except ImportError as e:
+        err_msg = str(e)
+        logger.error(f"❌ Failed to initialize TensorFlow / Keras: {err_msg}")
+        if "Application Control policy" in err_msg or "optree" in err_msg:
+            logger.error("🛑 Windows 11 Smart App Control (SAC) blocked Keras/TensorFlow binary extensions (_C.pyd / _pywrap_converter_api.pyd).")
+            logger.error("👉 Fix: Open Windows Security > App & browser control > Smart App Control settings > turn it Off.")
+        sys.exit(1)
 
     logger.info("==================================================")
     logger.info("⚡ Initializing TensorFlow / Keras EfficientNetB0 Engine")
@@ -273,8 +281,17 @@ def main():
 
     try:
         import tensorflow as tf
-    except ImportError:
-        logger.error("❌ TensorFlow is required for model training. Please install tensorflow: 'pip install tensorflow'")
+    except ImportError as e:
+        err_msg = str(e)
+        if sys.version_info >= (3, 13):
+            logger.error(f"❌ Python {sys.version.split()[0]} is not supported by TensorFlow. TensorFlow requires Python 3.10-3.12.")
+            logger.error("👉 Please use the Python 3.12 environment: '.\\.venv-tf\\Scripts\\python.exe training/train_model.py'")
+        elif "Application Control policy" in err_msg or "blocked" in err_msg.lower():
+            logger.error(f"❌ Windows Smart App Control blocked TensorFlow DLLs ({err_msg}).")
+            logger.error("👉 Disable Smart App Control in Windows Security: Settings > Privacy & security > Windows Security > App & browser control > Smart App Control > Off")
+        else:
+            logger.error(f"❌ TensorFlow is required for model training. Error: {err_msg}")
+            logger.error("👉 Please install tensorflow in a Python 3.11/3.12 environment: 'pip install tensorflow'")
         sys.exit(1)
 
     train_tensorflow(train_path, val_path, args)

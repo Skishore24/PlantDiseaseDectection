@@ -9,6 +9,7 @@ import {
 import { predictLeafImage, fetchHistory } from "../utils/api";
 import { generatePDFReport } from "../utils/pdfExport";
 import CameraModal from "../components/CameraModal";
+import LiveLeafScanner from "../components/LiveLeafScanner";
 
 const SAMPLES = [
   { name: "Tomato Early Blight", url: "/images/early_blight_leaf.png" },
@@ -23,6 +24,7 @@ export default function Predict() {
   const [scanResult, setScanResult] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isLiveScannerOpen, setIsLiveScannerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("about");
   const [cvViewMode, setCvViewMode] = useState("original"); // "original" | "gradcam" | "segmentation"
   const [recentScans, setRecentScans] = useState([]);
@@ -115,11 +117,20 @@ export default function Predict() {
 
       {/* Main Left Section */}
       <div className="lg:col-span-2 space-y-5">
-        <div>
-          <h2 className="text-xl font-bold text-ink">Diagnose Plant Leaf</h2>
-          <p className="text-sm text-ink-muted mt-0.5">
-            Upload or capture a leaf photo to identify diseases, inspect computer vision heatmaps, and quantify surface damage.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-ink">Diagnose Plant Leaf</h2>
+            <p className="text-sm text-ink-muted mt-0.5">
+              Upload or scan live with AI camera to identify diseases, inspect computer vision heatmaps, and quantify surface damage.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsLiveScannerOpen(true)}
+            className="btn btn-primary bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-sm shrink-0 flex items-center gap-2 self-start sm:self-auto"
+          >
+            <Scan className="w-4 h-4" />
+            <span>Live AI Scanner</span>
+          </button>
         </div>
 
         {errorMsg && (
@@ -167,8 +178,15 @@ export default function Predict() {
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
+                  onClick={() => setIsLiveScannerOpen(true)}
+                  className="btn btn-primary bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-sm"
+                >
+                  <Scan className="w-4 h-4" />
+                  Live AI Camera
+                </button>
+                <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="btn btn-primary"
+                  className="btn btn-secondary"
                 >
                   <ImageUp className="w-4 h-4" />
                   Select Image
@@ -625,6 +643,28 @@ export default function Predict() {
         onClose={() => setIsCameraOpen(false)}
         onCaptureFrame={(f) => { setIsCameraOpen(false); handleFileSelect(f); }}
         onShowToast={() => {}}
+      />
+
+      <LiveLeafScanner
+        isOpen={isLiveScannerOpen}
+        onClose={() => setIsLiveScannerOpen(false)}
+        onScanComplete={(result) => {
+          setIsLiveScannerOpen(false);
+          if (result) {
+            setScanResult(result);
+            if (result.cv_analysis?.segmented_overlay_url) {
+              setPreviewUrl(result.cv_analysis.segmented_overlay_url);
+              setCvViewMode("segmentation");
+            } else if (result.cv_analysis?.gradcam_heatmap_url) {
+              setPreviewUrl(result.cv_analysis.gradcam_heatmap_url);
+              setCvViewMode("gradcam");
+            }
+            loadHistoryData();
+          }
+        }}
+        onShowToast={(msg, type) => {
+          if (type === "error") setErrorMsg(msg);
+        }}
       />
     </div>
   );

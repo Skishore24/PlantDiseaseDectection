@@ -87,13 +87,8 @@ class DatabaseManager:
             logger.info(f"✅ MongoDB Atlas connected successfully to database: '{settings.DATABASE_NAME}'")
             return True
 
-        except ConnectionFailure as e:
-            logger.warning(f"MongoDB connection failure: {e}")
-            self.client = None
-            self.db = None
-            return False
-        except Exception as e:
-            logger.warning(f"MongoDB connection error: {e}")
+        except (ConnectionFailure, Exception) as e:
+            logger.info(f"ℹ️ MongoDB Atlas not reached. Operating in Local Development mode with JSON storage fallback.")
             self.client = None
             self.db = None
             return False

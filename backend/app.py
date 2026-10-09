@@ -21,6 +21,7 @@ from backend.services.model_service import model_service
 from backend.routes.health import router as health_router
 from backend.routes.auth import router as auth_router
 from backend.routes.prediction import router as predict_router
+from backend.routes.camera import router as camera_router
 from backend.routes.history import router as history_router
 from backend.routes.analytics import router as analytics_router
 
@@ -92,6 +93,7 @@ app.include_router(health_router, prefix=settings.API_V1_STR)
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(predict_router, prefix=settings.API_V1_STR)
+app.include_router(camera_router, prefix=settings.API_V1_STR)
 app.include_router(history_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
 
